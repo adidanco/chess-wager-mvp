@@ -114,9 +114,25 @@ export default function Home() {
           </div>
         )}
 
+        {/* ADDED: "Create Game" and "Join Game" buttons */}
+        <div className="flex gap-2 mt-4">
+          <button
+            onClick={() => navigate("/creategame")}
+            className="flex-1 bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
+          >
+            Create Game
+          </button>
+          <button
+            onClick={() => navigate("/joingame")}
+            className="flex-1 bg-indigo-500 text-white px-4 py-2 rounded hover:bg-indigo-600"
+          >
+            Join Game
+          </button>
+        </div>
+
         <button
           onClick={handleLogout}
-          className="mt-4 bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
+          className="mt-4 bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 w-full"
         >
           Log Out
         </button>
