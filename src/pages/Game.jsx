@@ -27,8 +27,64 @@ export default function Game() {
   const [whiteTimeDisplay, setWhiteTimeDisplay] = useState(300000)
   const [blackTimeDisplay, setBlackTimeDisplay] = useState(300000)
 
+  useEffect(() => {
+    if (!gameId) {
+      logger.error('Game', 'No game ID provided')
+      toast.error("Invalid game URL!")
+      navigate("/")
+      return
+    }
+
+    if (!auth.currentUser) {
+      logger.warn('Game', 'User not authenticated, redirecting to login')
+      navigate("/login")
+      return
+    }
+
+    logger.info('Game', 'Initializing game component', { gameId, userId: auth.currentUser.uid })
+
+    // Initialize chess instance
+    chessRef.current = new Chess()
+
+    // Subscribe to game updates
+    const gameRef = doc(db, "games", gameId)
+    const unsubscribe = onSnapshot(gameRef, (doc) => {
+      if (!doc.exists()) {
+        logger.error('Game', 'Game not found', { gameId })
+        toast.error("Game not found!")
+        navigate("/")
+        return
+      }
+
+      const data = doc.data()
+      setGameData(data)
+      setFen(data.currentFen)
+      setMoveHistory(data.moveHistory || [])
+      setWhiteTimeDisplay(data.whiteTime || 300000)
+      setBlackTimeDisplay(data.blackTime || 300000)
+
+      // Set player color
+      if (data.player1Id === auth.currentUser.uid) {
+        setMyColor("w")
+      } else if (data.player2Id === auth.currentUser.uid) {
+        setMyColor("b")
+      }
+    }, (error) => {
+      logger.error('Game', 'Error subscribing to game updates', { error })
+      toast.error("Error loading game!")
+      navigate("/")
+    })
+
+    return () => unsubscribe()
+  }, [gameId, navigate])
+
   // Helper function to handle payouts
   const handlePayout = async (winnerColor) => {
+    if (!gameId) {
+      logger.error('Game', 'Cannot process payout: no game ID')
+      return
+    }
+
     logger.info('Game', 'Processing payout', { gameId, winnerColor })
     try {
       const gameRef = doc(db, "games", gameId)
@@ -125,92 +181,6 @@ export default function Game() {
       throw err
     }
   }
-
-  useEffect(() => {
-    if (!auth.currentUser) {
-      logger.warn('Game', 'User not authenticated, redirecting to login')
-      navigate("/login")
-      return
-    }
-    
-    logger.info('Game', 'Initializing game component', { gameId, userId: auth.currentUser.uid })
-    
-    // Initialize chessRef once
-    chessRef.current = new Chess()
-    
-    // Subscribe to game doc
-    const gameRef = doc(db, "games", gameId)
-    const unsubscribe = onSnapshot(gameRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.data()
-        logger.debug('Game', 'Game data updated', { 
-          status: data.status,
-          currentTurn: data.currentTurn,
-          player1Id: data.player1Id,
-          player2Id: data.player2Id
-        })
-        
-        setGameData(data)
-        
-        // Don't allow moves if game is finished
-        if (data.status === "finished") {
-          logger.info('Game', 'Game is finished', { gameId })
-          setError("Game is finished!")
-          toast.error("Game is finished!")
-        }
-        
-        if (data.currentFen) {
-          setFen(data.currentFen)
-          chessRef.current.load(data.currentFen)
-        }
-
-        // Update move history if available
-        if (data.moveHistory) {
-          setMoveHistory(data.moveHistory)
-        }
-
-        // Update time displays from Firestore
-        if (data.whiteTime !== undefined) {
-          setWhiteTimeDisplay(data.whiteTime)
-        }
-        if (data.blackTime !== undefined) {
-          setBlackTimeDisplay(data.blackTime)
-        }
-      } else {
-        logger.error('Game', 'Game not found', { gameId })
-        setError("Game not found!")
-        toast.error("Game not found!")
-      }
-    }, (error) => {
-      logger.error('Game', 'Error in game snapshot listener', { error, gameId })
-    })
-    
-    // Figure out myColor once the doc is loaded
-    const loadMyColor = async () => {
-      try {
-        const docSnap = await getDoc(gameRef)
-        if (docSnap.exists()) {
-          const gData = docSnap.data()
-          if (gData.player1Id === auth.currentUser?.uid) {
-            setMyColor(gData.player1Color)
-          } else if (gData.player2Id === auth.currentUser?.uid) {
-            setMyColor(gData.player2Color)
-          } else {
-            setError("You are not a player in this game!")
-          }
-        }
-      } catch (err) {
-        setError("Error loading game data")
-        console.error(err)
-      }
-    }
-    loadMyColor()
-
-    return () => {
-      logger.debug('Game', 'Cleaning up game component', { gameId })
-      unsubscribe()
-    }
-  }, [gameId, navigate])
 
   // Add clock tick effect
   useEffect(() => {

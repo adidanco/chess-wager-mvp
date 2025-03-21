@@ -1,14 +1,16 @@
 import React, { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { auth, db } from "../firebase"
-import { doc, getDoc } from "firebase/firestore"
-import toast from "react-hot-toast"
+import { doc, getDoc, updateDoc, increment } from "firebase/firestore"
+import { toast } from "react-hot-toast"
 import { logger } from "../utils/logger"
 
 export default function Home() {
   const navigate = useNavigate()
   const [userData, setUserData] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [showDepositOptions, setShowDepositOptions] = useState(false)
+  const depositAmounts = [5, 10, 15, 20]
 
   useEffect(() => {
     if (!auth.currentUser) {
@@ -17,63 +19,74 @@ export default function Home() {
       return
     }
 
-    logger.info('Home', 'Initializing home component', { 
-      userId: auth.currentUser.uid 
-    })
-
-    // Fetch user data
-    const userRef = doc(db, "users", auth.currentUser.uid)
-    getDoc(userRef)
-      .then((doc) => {
-        if (doc.exists()) {
-          const data = doc.data()
-          logger.debug('Home', 'User data fetched', { 
+    const fetchUserData = async () => {
+      try {
+        const userRef = doc(db, "users", auth.currentUser.uid)
+        const userSnap = await getDoc(userRef)
+        
+        if (userSnap.exists()) {
+          const data = userSnap.data()
+          logger.info('Home', 'User data fetched', {
             userId: auth.currentUser.uid,
-            username: data.username,
-            balance: data.balance,
-            stats: data.stats
+            balance: data.balance
           })
           setUserData(data)
         } else {
-          logger.error('Home', 'User document not found', { 
-            userId: auth.currentUser.uid 
-          })
+          logger.error('Home', 'User document not found')
           toast.error("User data not found!")
         }
-      })
-      .catch((error) => {
-        logger.error('Home', 'Error fetching user data', { 
-          error, 
-          userId: auth.currentUser.uid 
-        })
-        toast.error("Error fetching user data!")
-      })
-      .finally(() => {
+      } catch (error) {
+        logger.error('Home', 'Error fetching user data', { error })
+        toast.error("Error loading user data!")
+      } finally {
         setLoading(false)
-      })
+      }
+    }
+
+    fetchUserData()
   }, [navigate])
 
+  const handleDeposit = async (amount) => {
+    try {
+      const userRef = doc(db, "users", auth.currentUser.uid)
+      await updateDoc(userRef, {
+        balance: increment(amount)
+      })
+
+      // Update local state
+      setUserData(prev => ({
+        ...prev,
+        balance: (prev.balance || 0) + amount
+      }))
+
+      logger.info('Home', 'Deposit successful', {
+        userId: auth.currentUser.uid,
+        amount
+      })
+
+      toast.success(`Successfully deposited $${amount}`)
+      setShowDepositOptions(false)
+    } catch (error) {
+      logger.error('Home', 'Error processing deposit', { error })
+      toast.error("Error processing deposit!")
+    }
+  }
+
   const handleLogout = async () => {
-    logger.info('Home', 'Attempting logout', { 
-      userId: auth.currentUser.uid 
-    })
     try {
       await auth.signOut()
-      logger.info('Home', 'Logout successful')
+      logger.info('Home', 'User logged out')
       navigate("/login")
     } catch (error) {
-      logger.error('Home', 'Logout failed', { 
-        error, 
-        userId: auth.currentUser.uid 
-      })
-      toast.error("Error logging out!")
+      logger.error('Home', 'Error signing out', { error })
+      toast.error("Error signing out!")
     }
   }
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <p>Loading...</p>
+        <div className="text-xl">Loading...</div>
       </div>
     )
   }
@@ -83,27 +96,48 @@ export default function Home() {
       <div className="bg-white p-8 rounded-lg shadow-md w-96">
         <h2 className="text-2xl font-bold mb-6 text-center">Welcome, {userData?.username || 'Player'}!</h2>
         
-        <div className="mb-6">
-          <h3 className="text-lg font-semibold mb-2">Your Stats</h3>
-          <div className="grid grid-cols-3 gap-4">
-            <div className="text-center">
-              <p className="text-sm text-gray-600">Wins</p>
-              <p className="text-xl font-bold text-green-600">{userData?.stats?.wins || 0}</p>
+        <div className="mb-8">
+          <h3 className="text-lg font-semibold mb-4">Your Stats</h3>
+          <div className="grid grid-cols-3 gap-4 text-center">
+            <div>
+              <div className="text-green-500 font-bold">{userData?.gamesWon || 0}</div>
+              <div className="text-sm text-gray-500">Wins</div>
             </div>
-            <div className="text-center">
-              <p className="text-sm text-gray-600">Losses</p>
-              <p className="text-xl font-bold text-red-600">{userData?.stats?.losses || 0}</p>
+            <div>
+              <div className="text-red-500 font-bold">{(userData?.gamesPlayed || 0) - (userData?.gamesWon || 0)}</div>
+              <div className="text-sm text-gray-500">Losses</div>
             </div>
-            <div className="text-center">
-              <p className="text-sm text-gray-600">Draws</p>
-              <p className="text-xl font-bold text-blue-600">{userData?.stats?.draws || 0}</p>
+            <div>
+              <div className="text-blue-500 font-bold">{userData?.draws || 0}</div>
+              <div className="text-sm text-gray-500">Draws</div>
             </div>
           </div>
         </div>
 
-        <div className="mb-6">
+        <div className="mb-8">
           <h3 className="text-lg font-semibold mb-2">Balance</h3>
-          <p className="text-2xl font-bold text-green-600">${userData?.balance?.toFixed(2) || '0.00'}</p>
+          <div className="text-2xl text-green-600 font-bold">${userData?.balance?.toFixed(2) || '0.00'}</div>
+          <div className="relative">
+            <button
+              onClick={() => setShowDepositOptions(!showDepositOptions)}
+              className="mt-2 w-full bg-green-500 text-white py-2 px-4 rounded-md hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+            >
+              Deposit
+            </button>
+            {showDepositOptions && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-10">
+                {depositAmounts.map((amount) => (
+                  <button
+                    key={amount}
+                    onClick={() => handleDeposit(amount)}
+                    className="w-full px-4 py-2 text-left hover:bg-gray-100 focus:outline-none"
+                  >
+                    ${amount}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="space-y-4">

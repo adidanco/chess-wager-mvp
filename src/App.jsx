@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom"
 import { Toaster } from "react-hot-toast"
-import { ErrorBoundary } from "./components/ErrorBoundary"
+import ErrorBoundary from "./components/ErrorBoundary"
 import { GameProvider } from "./context/GameContext"
 import { networkHandler } from "./utils/networkHandler"
 import { logger } from "./utils/logger"
