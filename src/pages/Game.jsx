@@ -1,11 +1,18 @@
 // ✅ ADDED: Game.jsx
 import React, { useEffect, useState, useRef } from "react"
 import { useParams, useNavigate } from "react-router-dom"
-import { doc, onSnapshot, updateDoc, getDoc } from "firebase/firestore"
+import { doc, onSnapshot, updateDoc, getDoc, serverTimestamp } from "firebase/firestore"
 import { db, auth } from "../firebase"
 import { Chess } from "chess.js"
 import { Chessboard } from "react-chessboard"  // from react-chessboard
 import toast from "react-hot-toast"
+
+// Helper function to format milliseconds into MM:SS
+const formatTime = (ms) => {
+  const minutes = Math.floor(ms / 60000)
+  const seconds = Math.floor((ms % 60000) / 1000)
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`
+}
 
 export default function Game() {
   const { gameId } = useParams()
@@ -16,6 +23,8 @@ export default function Game() {
   const [myColor, setMyColor] = useState(null)
   const [error, setError] = useState(null)
   const [moveHistory, setMoveHistory] = useState([])
+  const [whiteTimeDisplay, setWhiteTimeDisplay] = useState(300000)
+  const [blackTimeDisplay, setBlackTimeDisplay] = useState(300000)
 
   // Helper function to handle payouts
   async function handlePayout(winnerColor) {
@@ -134,6 +143,14 @@ export default function Game() {
         if (data.moveHistory) {
           setMoveHistory(data.moveHistory)
         }
+
+        // Update time displays from Firestore
+        if (data.whiteTime !== undefined) {
+          setWhiteTimeDisplay(data.whiteTime)
+        }
+        if (data.blackTime !== undefined) {
+          setBlackTimeDisplay(data.blackTime)
+        }
       } else {
         setError("Game not found!")
         toast.error("Game not found!")
@@ -163,6 +180,48 @@ export default function Game() {
 
     return () => unsubscribe()
   }, [gameId, navigate])
+
+  // Add clock tick effect
+  useEffect(() => {
+    if (!gameData || gameData.status === "finished") return
+
+    const intervalId = setInterval(() => {
+      const now = Date.now()
+      const elapsed = now - gameData.lastMoveTimestamp?.toDate().getTime()
+
+      let whiteDisplay = gameData.whiteTime
+      let blackDisplay = gameData.blackTime
+
+      if (gameData.currentTurn === "w") {
+        whiteDisplay = Math.max(0, whiteDisplay - elapsed)
+      } else {
+        blackDisplay = Math.max(0, blackDisplay - elapsed)
+      }
+
+      setWhiteTimeDisplay(whiteDisplay)
+      setBlackTimeDisplay(blackDisplay)
+
+      // Check for time out
+      if (whiteDisplay <= 0 || blackDisplay <= 0) {
+        const loserColor = whiteDisplay <= 0 ? "w" : "b"
+        const winnerColor = loserColor === "w" ? "b" : "w"
+        
+        const gameRef = doc(db, "games", gameId)
+        updateDoc(gameRef, {
+          status: "finished",
+          winner: winnerColor
+        }).then(() => {
+          handlePayout(winnerColor)
+          toast.success(`Game Over! ${winnerColor === "w" ? "White" : "Black"} wins on time!`)
+        }).catch(err => {
+          console.error("Error handling time out:", err)
+          toast.error("Error processing time out")
+        })
+      }
+    }, 100)
+
+    return () => clearInterval(intervalId)
+  }, [gameData, gameId])
 
   const onDrop = async (sourceSquare, targetSquare) => {
     if (!myColor) {
@@ -199,12 +258,28 @@ export default function Game() {
           timestamp: new Date().toISOString()
         }]
 
+        // Calculate time spent on move
+        const now = Date.now()
+        const timeSpent = now - gameData.lastMoveTimestamp?.toDate().getTime()
+
+        let newWhiteTime = gameData.whiteTime
+        let newBlackTime = gameData.blackTime
+
+        if (gameData.currentTurn === "w") {
+          newWhiteTime = Math.max(0, newWhiteTime - timeSpent)
+        } else {
+          newBlackTime = Math.max(0, newBlackTime - timeSpent)
+        }
+
         const gameRef = doc(db, "games", gameId)
         await updateDoc(gameRef, {
           currentFen: newFen,
           currentTurn: nextTurn,
           moveHistory: newMoveHistory,
-          pgn: pgn
+          pgn: pgn,
+          whiteTime: newWhiteTime,
+          blackTime: newBlackTime,
+          lastMoveTimestamp: serverTimestamp()
         })
 
         if (chessRef.current.isGameOver()) {
@@ -269,6 +344,16 @@ export default function Game() {
       {/* Show my color */}
       <p>You are playing: {myColor === "w" ? "White" : "Black"}</p>
       <p className="text-green-600 font-semibold mb-2">Wager: ₹{gameData?.wager}</p>
+
+      {/* Add Clock Display */}
+      <div className="flex gap-8 mb-4">
+        <div className={`text-2xl font-bold ${gameData?.currentTurn === "w" ? "text-blue-600" : "text-gray-600"}`}>
+          White: {formatTime(whiteTimeDisplay)}
+        </div>
+        <div className={`text-2xl font-bold ${gameData?.currentTurn === "b" ? "text-blue-600" : "text-gray-600"}`}>
+          Black: {formatTime(blackTimeDisplay)}
+        </div>
+      </div>
 
       <div className="flex gap-8">
         <div className={`relative ${gameData?.status === "finished" ? "opacity-50 pointer-events-none" : ""}`}>

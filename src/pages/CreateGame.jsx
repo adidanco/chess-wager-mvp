@@ -59,7 +59,7 @@ export default function CreateGame() {
         return
       }
 
-      // Create game with random color assignment
+      // Create game with random color assignment and time control
       const myColor = Math.random() < 0.5 ? "w" : "b"
       const gameRef = await addDoc(collection(db, "games"), {
         player1Id: auth.currentUser.uid,
@@ -71,7 +71,11 @@ export default function CreateGame() {
         status: "waiting",
         currentFen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
         currentTurn: "w",
-        createdAt: serverTimestamp()
+        createdAt: serverTimestamp(),
+        // Add time control fields
+        whiteTime: 300000, // 5 minutes in milliseconds
+        blackTime: 300000,
+        lastMoveTimestamp: serverTimestamp()
       })
 
       // Deduct wager from user's balance
