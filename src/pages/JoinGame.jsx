@@ -34,10 +34,30 @@ export default function JoinGame() {
         return
       }
 
-      // Join as player2
+      // Check player2's balance against gameData.wager
+      const userRef = doc(db, "users", auth.currentUser.uid)
+      const userSnap = await getDoc(userRef)
+      if (!userSnap.exists()) {
+        alert("Your user record not found!")
+        return
+      }
+      const player2Data = userSnap.data()
+      const player2Balance = player2Data.balance || 0
+
+      if (player2Balance < gameData.wager) {
+        alert(`Insufficient balance! You only have ₹${player2Balance}`)
+        return
+      }
+
+      // Deduct wager from player2
+      await updateDoc(userRef, {
+        balance: player2Balance - gameData.wager
+      })
+
+      // Mark game as ongoing
       await updateDoc(gameRef, {
         player2Id: auth.currentUser.uid,
-        status: "ongoing",   // switch from waiting to ongoing
+        status: "ongoing"
       })
 
       // Go to the game page

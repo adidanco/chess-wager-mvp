@@ -2,7 +2,7 @@ import { useEffect, useState } from "react"
 import { onAuthStateChanged, signOut } from "firebase/auth"
 import { doc, getDoc, updateDoc } from "firebase/firestore"
 import { auth, db } from "../firebase"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, Link } from "react-router-dom"
 
 export default function Home() {
   const [user, setUser] = useState(null)
@@ -72,71 +72,83 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4">
-      <div className="max-w-xl mx-auto bg-white p-6 rounded shadow">
-        <h1 className="text-2xl font-bold mb-4">Welcome, {userData?.username || user.email}</h1>
-        <p className="mb-2">Balance: {userData?.balance ?? 0}</p>
-        <p className="mb-2">Stats: 
-          W: {userData?.stats?.wins} |
-          L: {userData?.stats?.losses} |
-          D: {userData?.stats?.draws}
-        </p>
-        <button
-          onClick={() => setShowDepositMenu(true)}
-          className="mt-4 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
-        >
-          Deposit Money
-        </button>
-
-        {showDepositMenu && (
-          <div className="mt-4 bg-white p-4 shadow rounded">
-            <h2 className="text-lg font-semibold mb-2">Select Amount to Deposit</h2>
-            <div className="flex gap-2">
-              {depositAmounts.map((amount) => (
-                <button
-                  key={amount}
-                  onClick={() => {
-                    handleDeposit(amount);
-                    setShowDepositMenu(false);
-                  }}
-                  className="bg-gray-200 px-3 py-1 rounded hover:bg-gray-300"
-                >
-                  ₹{amount}
-                </button>
-              ))}
-            </div>
-            <button
-              onClick={() => setShowDepositMenu(false)}
-              className="mt-2 text-red-500"
-            >
-              Cancel
-            </button>
+    <div className="container mx-auto px-4 py-8">
+      <h1 className="text-3xl font-bold mb-8">Chess Wager</h1>
+      
+      {!auth.currentUser ? (
+        <div className="space-y-4">
+          <p className="text-lg">Please log in or sign up to play!</p>
+          <div className="flex gap-4">
+            <Link to="/login" className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+              Login
+            </Link>
+            <Link to="/signup" className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">
+              Sign Up
+            </Link>
           </div>
-        )}
-
-        {/* ADDED: "Create Game" and "Join Game" buttons */}
-        <div className="flex gap-2 mt-4">
-          <button
-            onClick={() => navigate("/creategame")}
-            className="flex-1 bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
-          >
-            Create Game
-          </button>
-          <button
-            onClick={() => navigate("/joingame")}
-            className="flex-1 bg-indigo-500 text-white px-4 py-2 rounded hover:bg-indigo-600"
-          >
-            Join Game
-          </button>
         </div>
+      ) : (
+        <div className="space-y-6">
+          <div className="bg-white p-6 rounded-lg shadow">
+            <h2 className="text-xl font-semibold mb-4">Your Balance: ₹{userData?.balance ?? 0}</h2>
+            <div className="flex gap-4">
+              <Link to="/create-game" className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                Create Game
+              </Link>
+              <Link to="/available-games" className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">
+                Join Game
+              </Link>
+              <button
+                onClick={handleLogout}
+                className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
+              >
+                Logout
+              </button>
+            </div>
+          </div>
 
-        <button
-          onClick={handleLogout}
-          className="mt-4 bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 w-full"
-        >
-          Log Out
-        </button>
-      </div>
+          <div className="max-w-xl mx-auto bg-white p-6 rounded shadow">
+            <h1 className="text-2xl font-bold mb-4">Welcome, {userData?.username || user.email}</h1>
+            <p className="mb-2">Stats: 
+              W: {userData?.stats?.wins} |
+              L: {userData?.stats?.losses} |
+              D: {userData?.stats?.draws}
+            </p>
+            <button
+              onClick={() => setShowDepositMenu(true)}
+              className="mt-4 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+            >
+              Deposit Money
+            </button>
+
+            {showDepositMenu && (
+              <div className="mt-4 bg-white p-4 shadow rounded">
+                <h2 className="text-lg font-semibold mb-2">Select Amount to Deposit</h2>
+                <div className="flex gap-2">
+                  {depositAmounts.map((amount) => (
+                    <button
+                      key={amount}
+                      onClick={() => {
+                        handleDeposit(amount);
+                        setShowDepositMenu(false);
+                      }}
+                      className="bg-gray-200 px-3 py-1 rounded hover:bg-gray-300"
+                    >
+                      ₹{amount}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={() => setShowDepositMenu(false)}
+                  className="mt-2 text-red-500"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
