@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react"
-import { collection, query, where, onSnapshot, orderBy } from "firebase/firestore"
+import { collection, query, where, onSnapshot, orderBy, getDocs } from "firebase/firestore"
 import { db, auth } from "../firebase"
 import { useNavigate } from "react-router-dom"
 import toast from "react-hot-toast"
@@ -23,6 +23,21 @@ export default function AvailableGames() {
       orderBy("createdAt", "desc")
     )
 
+    // First, get initial data
+    getDocs(q).then((snapshot) => {
+      const gamesList = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+      setGames(gamesList)
+      setLoading(false)
+    }).catch((error) => {
+      console.error("Error fetching games:", error)
+      toast.error("Failed to load available games")
+      setLoading(false)
+    })
+
+    // Then set up real-time listener
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const gamesList = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -31,9 +46,8 @@ export default function AvailableGames() {
       setGames(gamesList)
       setLoading(false)
     }, (error) => {
-      console.error("Error fetching games:", error)
-      toast.error("Failed to load available games")
-      setLoading(false)
+      console.error("Error in real-time listener:", error)
+      toast.error("Error updating game list")
     })
 
     return () => unsubscribe()
@@ -50,6 +64,19 @@ export default function AvailableGames() {
       }
 
       const gameData = gameSnap.data()
+      
+      // Check if game is still waiting
+      if (gameData.status !== "waiting") {
+        toast.error("This game is no longer available")
+        return
+      }
+
+      // Check if user is trying to join their own game
+      if (gameData.player1Id === auth.currentUser.uid) {
+        toast.error("You cannot join your own game")
+        return
+      }
+
       const userRef = doc(db, "users", auth.currentUser.uid)
       const userSnap = await getDoc(userRef)
 
