@@ -7,6 +7,7 @@ import { Chess } from "chess.js"
 import { Chessboard } from "react-chessboard"  // from react-chessboard
 import toast from "react-hot-toast"
 import { logger } from "../utils/logger"
+import { useAuth } from "../context/AuthContext"
 
 // Helper function to format milliseconds into MM:SS
 const formatTime = (ms) => {
@@ -17,6 +18,7 @@ const formatTime = (ms) => {
 
 export default function Game() {
   const { gameId } = useParams()
+  const { user } = useAuth()
   const navigate = useNavigate()
   const [fen, setFen] = useState("")       // current board position
   const [gameData, setGameData] = useState(null) // store entire game doc
@@ -30,18 +32,19 @@ export default function Game() {
   useEffect(() => {
     if (!gameId) {
       logger.error('Game', 'No game ID provided')
+      setError("Invalid game URL!")
       toast.error("Invalid game URL!")
       navigate("/")
       return
     }
 
-    if (!auth.currentUser) {
+    if (!user) {
       logger.warn('Game', 'User not authenticated, redirecting to login')
       navigate("/login")
       return
     }
 
-    logger.info('Game', 'Initializing game component', { gameId, userId: auth.currentUser.uid })
+    logger.info('Game', 'Initializing game component', { gameId, userId: user.uid })
 
     // Initialize chess instance
     chessRef.current = new Chess()
@@ -51,6 +54,7 @@ export default function Game() {
     const unsubscribe = onSnapshot(gameRef, (doc) => {
       if (!doc.exists()) {
         logger.error('Game', 'Game not found', { gameId })
+        setError("Game not found!")
         toast.error("Game not found!")
         navigate("/")
         return
@@ -64,19 +68,20 @@ export default function Game() {
       setBlackTimeDisplay(data.blackTime || 300000)
 
       // Set player color
-      if (data.player1Id === auth.currentUser.uid) {
+      if (data.player1Id === user.uid) {
         setMyColor("w")
-      } else if (data.player2Id === auth.currentUser.uid) {
+      } else if (data.player2Id === user.uid) {
         setMyColor("b")
       }
     }, (error) => {
       logger.error('Game', 'Error subscribing to game updates', { error })
+      setError("Error loading game!")
       toast.error("Error loading game!")
       navigate("/")
     })
 
     return () => unsubscribe()
-  }, [gameId, navigate])
+  }, [gameId, navigate, user])
 
   // Helper function to handle payouts
   const handlePayout = async (winnerColor) => {
