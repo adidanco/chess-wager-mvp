@@ -4,6 +4,9 @@ import ErrorBoundary from "./components/ErrorBoundary"
 import { GameProvider } from "./context/GameContext"
 import { networkHandler } from "./utils/networkHandler"
 import { logger } from "./utils/logger"
+import { auth } from "./firebase"
+import { onAuthStateChanged } from "firebase/auth"
+import { useEffect } from "react"
 
 // Pages
 import Home from "./pages/Home"
@@ -27,6 +30,18 @@ const withNetworkCheck = async (operation) => {
 logger.info('App', 'Initializing application')
 
 function App() {
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        logger.info('App', 'User authenticated', { userId: user.uid })
+      } else {
+        logger.info('App', 'User signed out')
+      }
+    })
+
+    return () => unsubscribe()
+  }, [])
+
   return (
     <ErrorBoundary>
       <GameProvider>
