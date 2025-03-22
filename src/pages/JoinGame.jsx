@@ -2,7 +2,7 @@
 // ✅ ADDED: JoinGame page
 import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { collection, query, where, onSnapshot, doc, updateDoc, getDoc, increment } from "firebase/firestore"
+import { collection, query, where, onSnapshot, doc, updateDoc, getDoc, increment, orderBy } from "firebase/firestore"
 import { db, auth } from "../firebase"
 import toast from "react-hot-toast"
 import { logger } from "../utils/logger"
@@ -53,8 +53,7 @@ export default function JoinGame() {
     // Subscribe to available games
     const q = query(
       collection(db, "games"),
-      where("status", "==", "waiting"),
-      where("player1Id", "not-in", [auth.currentUser.uid, null])
+      where("status", "==", "waiting")
     )
 
     logger.debug('JoinGame', 'Setting up games query', { 
@@ -67,13 +66,16 @@ export default function JoinGame() {
         const games = []
         snapshot.forEach((doc) => {
           const gameData = doc.data()
-          logger.debug('JoinGame', 'Found game', { 
-            gameId: doc.id,
-            status: gameData.status,
-            player1Id: gameData.player1Id,
-            player2Id: gameData.player2Id
-          })
-          games.push({ id: doc.id, ...gameData })
+          // Client-side filter to exclude user's own games
+          if (gameData.whitePlayer !== auth.currentUser.uid) {
+            logger.debug('JoinGame', 'Found game', { 
+              gameId: doc.id,
+              status: gameData.status,
+              whitePlayer: gameData.whitePlayer,
+              blackPlayer: gameData.blackPlayer
+            })
+            games.push({ id: doc.id, ...gameData })
+          }
         })
         logger.debug('JoinGame', 'Available games updated', { 
           count: games.length,
@@ -145,8 +147,7 @@ export default function JoinGame() {
 
       // Update game document
       await updateDoc(gameRef, {
-        player2Id: auth.currentUser.uid,
-        player2Color: "b",
+        blackPlayer: auth.currentUser.uid,
         status: "in_progress",
         pot: gameData.pot + wager
       })

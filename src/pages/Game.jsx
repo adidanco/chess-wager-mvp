@@ -1,7 +1,7 @@
 // ✅ ADDED: Game.jsx
 import React, { useEffect, useState, useRef } from "react"
 import { useParams, useNavigate } from "react-router-dom"
-import { doc, onSnapshot, updateDoc, getDoc, serverTimestamp } from "firebase/firestore"
+import { doc, onSnapshot, updateDoc, getDoc, serverTimestamp, arrayUnion } from "firebase/firestore"
 import { db, auth } from "../firebase"
 import { Chess } from "chess.js"
 import { Chessboard } from "react-chessboard"  // from react-chessboard
@@ -22,6 +22,7 @@ export default function Game() {
   const navigate = useNavigate()
   const [fen, setFen] = useState("")       // current board position
   const [gameData, setGameData] = useState(null) // store entire game doc
+  const [currentTurn, setCurrentTurn] = useState("w") // current turn state
   const chessRef = useRef(null)            // ref to store a Chess instance
   const [myColor, setMyColor] = useState(null)
   const [error, setError] = useState(null)
@@ -30,436 +31,164 @@ export default function Game() {
   const [blackTimeDisplay, setBlackTimeDisplay] = useState(300000)
   const clockStartedRef = useRef(false)
   const intervalId = useRef(null)
+  const [timeLeft, setTimeLeft] = useState(300000) // Add this state for clock management
+  const [clockInterval, setClockInterval] = useState(null) // Add this state for clock interval
 
   useEffect(() => {
-    if (!gameId) {
-      logger.error('Game', 'No game ID provided')
-      setError("Invalid game URL!")
-      toast.error("Invalid game URL!")
-      navigate("/")
-      return
-    }
-
-    if (!user) {
-      logger.warn('Game', 'User not authenticated, redirecting to login')
-      navigate("/login")
-      return
-    }
+    if (!gameId || !user) return
 
     logger.info('Game', 'Initializing game component', { gameId, userId: user.uid })
 
-    // Initialize chess instance
-    chessRef.current = new Chess()
-    
     // Subscribe to game updates
     const gameRef = doc(db, "games", gameId)
     const unsubscribe = onSnapshot(gameRef, (doc) => {
       if (!doc.exists()) {
-        logger.error('Game', 'Game not found', { gameId })
-        setError("Game not found!")
+        logger.error('Game', 'Game document not found', { gameId })
         toast.error("Game not found!")
         navigate("/")
         return
       }
 
-      const data = doc.data()
-      setGameData(data)
-          setFen(data.currentFen)
-      setMoveHistory(data.moveHistory || [])
-      setWhiteTimeDisplay(data.whiteTime || 300000)
-      setBlackTimeDisplay(data.blackTime || 300000)
-
-      // Set player color
-      if (data.player1Id === user.uid) {
-        setMyColor("w")
-      } else if (data.player2Id === user.uid) {
-        setMyColor("b")
-      }
-    }, (error) => {
-      logger.error('Game', 'Error subscribing to game updates', { error })
-      setError("Error loading game!")
-      toast.error("Error loading game!")
-      navigate("/")
-    })
-    
-    return () => unsubscribe()
-  }, [gameId, navigate, user])
-
-  // Start clock when game is ongoing
-  useEffect(() => {
-    if (!gameData) return
-    if (gameData.status !== "ongoing") {
-      logger.debug('Game', 'Game not in progress, clock stopped', { 
-        gameId, 
-        status: gameData.status 
+      const gameData = doc.data()
+      logger.debug('Game', 'Game data updated', { 
+        gameId,
+        status: gameData.status,
+        currentTurn: gameData.currentTurn,
+        whitePlayer: gameData.whitePlayer,
+        blackPlayer: gameData.blackPlayer
       })
-      return
-    }
 
-    logger.debug('Game', 'Starting clock tick', { gameId })
-    startClockTick()
-    clockStartedRef.current = true
+      setGameData(gameData)
+      setFen(gameData.fen || "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+      setMyColor(gameData.whitePlayer === user.uid ? "w" : "b")
+      setError(null)
+      setMoveHistory(gameData.moveHistory || [])
+      setWhiteTimeDisplay(gameData.whiteTime || 300000)
+      setBlackTimeDisplay(gameData.blackTime || 300000)
+      setCurrentTurn(gameData.currentTurn || "w")
+
+      // Start clock if game is in progress
+      if (gameData.status === "in_progress") {
+        startClock(gameData.currentTurn || "w", gameData.lastMoveTime?.toDate() || new Date())
+      } else {
+        stopClock()
+      }
+    })
 
     return () => {
-      logger.debug('Game', 'Cleaning up clock tick', { gameId })
-      clearInterval(intervalId.current)
+      logger.debug('Game', 'Cleaning up game component', { gameId })
+      unsubscribe()
+      stopClock()
     }
-  }, [gameData, gameId])
+  }, [gameId, user, navigate])
 
-  // Helper function to handle payouts
-  const handlePayout = async (winnerColor) => {
-    if (!gameId) {
-      logger.error('Game', 'Cannot process payout: no game ID')
+  const startClock = (turn, lastMoveTime) => {
+    stopClock()
+    const now = new Date()
+    const elapsed = Math.floor((now - lastMoveTime) / 1000)
+    const initialTime = turn === "w" ? whiteTimeDisplay : blackTimeDisplay
+    const remainingTime = Math.max(0, initialTime - elapsed)
+
+    if (remainingTime <= 0) {
+      handleTimeUp(turn === "w" ? "b" : "w")
       return
     }
 
-    logger.info('Game', 'Processing payout', { gameId, winnerColor })
-    try {
-      const gameRef = doc(db, "games", gameId)
-      const gameSnap = await getDoc(gameRef)
-      if (!gameSnap.exists()) {
-        logger.error('Game', 'Game not found during payout', { gameId })
-        throw new Error("Game not found!")
-      }
-
-      const gameData = gameSnap.data()
-      const pot = gameData.pot
-      const winnerId = winnerColor === "w" ? gameData.player1Id : gameData.player2Id
-      const loserId = winnerColor === "w" ? gameData.player2Id : gameData.player1Id
-
-      logger.debug('Game', 'Payout details', { pot, winnerId, loserId })
-
-      // Update winner's balance
-      const winnerRef = doc(db, "users", winnerId)
-      const winnerSnap = await getDoc(winnerRef)
-      if (!winnerSnap.exists()) {
-        logger.error('Game', 'Winner not found during payout', { winnerId })
-        throw new Error("Winner not found!")
-      }
-      const winnerData = winnerSnap.data()
-      await updateDoc(winnerRef, {
-        balance: (winnerData.balance || 0) + pot,
-        "stats.wins": (winnerData.stats?.wins || 0) + 1
+    setTimeLeft(remainingTime)
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer)
+          handleTimeUp(turn === "w" ? "b" : "w")
+          return 0
+        }
+        return prev - 1
       })
+    }, 1000)
 
-      // Update loser's stats
-      const loserRef = doc(db, "users", loserId)
-      const loserSnap = await getDoc(loserRef)
-      if (!loserSnap.exists()) {
-        logger.error('Game', 'Loser not found during payout', { loserId })
-        throw new Error("Loser not found!")
-      }
-      const loserData = loserSnap.data()
-      await updateDoc(loserRef, {
-        "stats.losses": (loserData.stats?.losses || 0) + 1
-      })
+    setClockInterval(timer)
+  }
 
-      logger.info('Game', 'Payout completed successfully', { gameId, winnerId, pot })
-    } catch (err) {
-      logger.error('Game', 'Payout failed', { error: err, gameId, winnerColor })
-      throw err
+  const stopClock = () => {
+    if (clockInterval) {
+      clearInterval(clockInterval)
+      setClockInterval(null)
     }
   }
 
-  // Helper function to handle draw refunds
-  const handleDrawRefund = async () => {
-    logger.info('Game', 'Processing draw refund', { gameId })
+  const handleTimeUp = async (winner) => {
+    stopClock()
     try {
       const gameRef = doc(db, "games", gameId)
-      const gameSnap = await getDoc(gameRef)
-      if (!gameSnap.exists()) {
-        logger.error('Game', 'Game not found during draw refund', { gameId })
-        throw new Error("Game not found!")
-      }
-
-      const gameData = gameSnap.data()
-      const wager = gameData.wager
-
-      logger.debug('Game', 'Draw refund details', { wager, player1Id: gameData.player1Id, player2Id: gameData.player2Id })
-
-      // Refund player1
-      const player1Ref = doc(db, "users", gameData.player1Id)
-      const player1Snap = await getDoc(player1Ref)
-      if (!player1Snap.exists()) {
-        logger.error('Game', 'Player1 not found during draw refund', { player1Id: gameData.player1Id })
-        throw new Error("Player1 not found!")
-      }
-      const player1Data = player1Snap.data()
-      await updateDoc(player1Ref, {
-        balance: (player1Data.balance || 0) + wager,
-        "stats.draws": (player1Data.stats?.draws || 0) + 1
-      })
-
-      // Refund player2
-      const player2Ref = doc(db, "users", gameData.player2Id)
-      const player2Snap = await getDoc(player2Ref)
-      if (!player2Snap.exists()) {
-        logger.error('Game', 'Player2 not found during draw refund', { player2Id: gameData.player2Id })
-        throw new Error("Player2 not found!")
-      }
-      const player2Data = player2Snap.data()
-      await updateDoc(player2Ref, {
-        balance: (player2Data.balance || 0) + wager,
-        "stats.draws": (player2Data.stats?.draws || 0) + 1
-      })
-
-      logger.info('Game', 'Draw refund completed successfully', { gameId })
-    } catch (err) {
-      logger.error('Game', 'Draw refund failed', { error: err, gameId })
-      throw err
-    }
-  }
-
-  const startClockTick = () => {
-    if (!gameData) return
-    if (gameData.status !== "ongoing") return
-
-    logger.debug('Game', 'Starting clock tick', { gameId })
-
-    const now = Date.now()
-    const elapsed = now - gameData.lastMoveTimestamp?.toDate().getTime()
-
-    let whiteDisplay = gameData.whiteTime
-    let blackDisplay = gameData.blackTime
-
-    if (gameData.currentTurn === "w") {
-      whiteDisplay = Math.max(0, whiteDisplay - elapsed)
-    } else {
-      blackDisplay = Math.max(0, blackDisplay - elapsed)
-    }
-
-    setWhiteTimeDisplay(whiteDisplay)
-    setBlackTimeDisplay(blackDisplay)
-
-    // Check for time out
-    if (whiteDisplay <= 0 || blackDisplay <= 0) {
-      const loserColor = whiteDisplay <= 0 ? "w" : "b"
-      const winnerColor = loserColor === "w" ? "b" : "w"
-      
-      logger.info('Game', 'Time out detected', { 
-        gameId, 
-        loserColor, 
-        winnerColor,
-        whiteTime: whiteDisplay,
-        blackTime: blackDisplay
-      })
-      
-      const gameRef = doc(db, "games", gameId)
-      updateDoc(gameRef, {
+      await updateDoc(gameRef, {
         status: "finished",
-        winner: winnerColor
-      }).then(() => {
-        handlePayout(winnerColor)
-        toast.success(`Game Over! ${winnerColor === "w" ? "White" : "Black"} wins on time!`)
-      }).catch(err => {
-        logger.error('Game', 'Error handling time out', { error: err, gameId })
-        toast.error("Error processing time out")
+        winner: winner,
+        endTime: serverTimestamp()
       })
+      toast.success(winner === myColor ? "You won on time!" : "You lost on time!")
+    } catch (error) {
+      logger.error('Game', 'Error updating game status for time up', { error, gameId })
+      toast.error("Error updating game status!")
     }
-
-    intervalId.current = setInterval(() => {
-      const now = Date.now()
-      const elapsed = now - gameData.lastMoveTimestamp?.toDate().getTime()
-
-      let whiteDisplay = gameData.whiteTime
-      let blackDisplay = gameData.blackTime
-
-      if (gameData.currentTurn === "w") {
-        whiteDisplay = Math.max(0, whiteDisplay - elapsed)
-      } else {
-        blackDisplay = Math.max(0, blackDisplay - elapsed)
-      }
-
-      setWhiteTimeDisplay(whiteDisplay)
-      setBlackTimeDisplay(blackDisplay)
-
-      // Check for time out
-      if (whiteDisplay <= 0 || blackDisplay <= 0) {
-        const loserColor = whiteDisplay <= 0 ? "w" : "b"
-        const winnerColor = loserColor === "w" ? "b" : "w"
-        
-        logger.info('Game', 'Time out detected', { 
-          gameId, 
-          loserColor, 
-          winnerColor,
-          whiteTime: whiteDisplay,
-          blackTime: blackDisplay
-        })
-        
-        const gameRef = doc(db, "games", gameId)
-        updateDoc(gameRef, {
-          status: "finished",
-          winner: winnerColor
-        }).then(() => {
-          handlePayout(winnerColor)
-          toast.success(`Game Over! ${winnerColor === "w" ? "White" : "Black"} wins on time!`)
-        }).catch(err => {
-          logger.error('Game', 'Error handling time out', { error: err, gameId })
-          toast.error("Error processing time out")
-        })
-      }
-    }, 100)
   }
 
-  const onDrop = async (sourceSquare, targetSquare) => {
-    logger.debug('Game', 'Attempting move', { 
-      gameId, 
-      sourceSquare, 
-      targetSquare, 
-      currentTurn: gameData?.currentTurn,
-      myColor 
-    })
+  const handleMove = async (move) => {
+    if (!gameData || gameData.status !== "in_progress") return
 
-    if (!myColor) {
-      logger.warn('Game', 'Move attempted without color assignment', { gameId })
-      toast.error("Your color hasn't been assigned yet")
-      return false
-    }
-    if (gameData?.currentTurn !== myColor) {
-      logger.warn('Game', 'Move attempted out of turn', { 
-        gameId, 
-        currentTurn: gameData?.currentTurn,
-        myColor 
-      })
-      toast.error("Not your turn!")
-      return false
-    }
-    if (gameData?.status === "finished") {
-      logger.warn('Game', 'Move attempted in finished game', { gameId })
-      toast.error("Game is finished!")
-      return false
-    }
-    if (gameData?.status === "waiting") {
-      logger.warn('Game', 'Move attempted while waiting for opponent', { gameId })
-      toast.error("Waiting for opponent to join!")
-      return false
-    }
-    if (gameData?.status !== "in_progress") {
-      logger.warn('Game', 'Move attempted in invalid game state', { 
-        gameId, 
-        status: gameData?.status 
-      })
-      toast.error("Game is not in progress!")
-      return false
-    }
-
-    const move = chessRef.current.move({
-      from: sourceSquare,
-      to: targetSquare,
-      promotion: "q"
-    })
+    const isPlayerTurn = (gameData.currentTurn === "w" && gameData.whitePlayer === user.uid) || 
+                        (gameData.currentTurn === "b" && gameData.blackPlayer === user.uid)
     
-    if (move == null) {
-      logger.warn('Game', 'Illegal move attempted', { 
-        gameId, 
-        sourceSquare, 
-        targetSquare 
-      })
-      toast.error("Illegal move!")
-      return false
-    } else {
-      try {
-      const newFen = chessRef.current.fen()
-        const nextTurn = (myColor === "w") ? "b" : "w"
-        const pgn = chessRef.current.pgn()
-        const newMoveHistory = [...moveHistory, {
-          number: moveHistory.length + 1,
-          white: move.color === "w" ? pgn.split(" ").pop() : "",
-          black: move.color === "b" ? pgn.split(" ").pop() : "",
-          timestamp: new Date().toISOString()
-        }]
+    if (!isPlayerTurn) {
+      toast.error("It's not your turn!")
+      return
+    }
 
-        // Calculate time spent on move
-        const now = Date.now()
-        const timeSpent = now - gameData.lastMoveTimestamp?.toDate().getTime()
-
-        let newWhiteTime = gameData.whiteTime
-        let newBlackTime = gameData.blackTime
-
-        if (gameData.currentTurn === "w") {
-          newWhiteTime = Math.max(0, newWhiteTime - timeSpent)
-        } else {
-          newBlackTime = Math.max(0, newBlackTime - timeSpent)
-        }
-
-        logger.info('Game', 'Move successful', { 
-          gameId, 
-          move, 
-          newFen, 
-          nextTurn,
-          whiteTime: newWhiteTime,
-          blackTime: newBlackTime
-        })
-
+    try {
       const gameRef = doc(db, "games", gameId)
-        await updateDoc(gameRef, {
-          currentFen: newFen,
-          currentTurn: nextTurn,
-          moveHistory: newMoveHistory,
-          pgn: pgn,
-          whiteTime: newWhiteTime,
-          blackTime: newBlackTime,
-          lastMoveTimestamp: serverTimestamp()
+      const newTurn = gameData.currentTurn === "w" ? "b" : "w"
+      const now = new Date()
+
+      await updateDoc(gameRef, {
+        fen: move.fen,
+        currentTurn: newTurn,
+        lastMoveTime: serverTimestamp(),
+        [`${newTurn === "w" ? "white" : "black"}Time`]: timeLeft,
+        moveHistory: arrayUnion({
+          number: moveHistory.length + 1,
+          white: move.color === "w" ? move.san : "",
+          black: move.color === "b" ? move.san : "",
+          timestamp: now.toISOString()
         })
+      })
 
-        if (chessRef.current.isGameOver()) {
-          const checkmated = chessRef.current.isCheckmate()
-          let gameResult = "draw"
-          let winnerColor = null
+      logger.debug('Game', 'Move made', { 
+        gameId,
+        move: move.san,
+        newTurn,
+        timeLeft
+      })
 
-          if (checkmated) {
-            gameResult = myColor
-            winnerColor = myColor
-          }
+      startClock(newTurn, now)
+    } catch (error) {
+      logger.error('Game', 'Error making move', { error, gameId })
+      toast.error("Error making move!")
+    }
+  }
 
-          logger.info('Game', 'Game over detected', { 
-            gameId, 
-            checkmated, 
-            gameResult, 
-            winnerColor 
-          })
+  const handleGameOver = async (result) => {
+    if (!gameData || gameData.status !== "in_progress") return
 
-          await updateDoc(gameRef, {
-            status: "finished",
-            winner: gameResult
-          })
-
-          if (checkmated) {
-            try {
-              await handlePayout(gameResult)
-              toast.success(`Game Over! Winner: ${winnerColor === "w" ? "White" : "Black"}`)
-            } catch (err) {
-              logger.error('Game', 'Payout error after checkmate', { 
-                error: err, 
-                gameId, 
-                gameResult 
-              })
-              toast.error("Game Over! Error processing payout.")
-            }
-          } else {
-            try {
-              await handleDrawRefund()
-              toast.success("Game Over! It's a draw!")
-            } catch (err) {
-              logger.error('Game', 'Refund error after draw', { 
-                error: err, 
-                gameId 
-              })
-              toast.error("Game Over! Error processing refund.")
-            }
-          }
-        }
-
-      return true
-      } catch (err) {
-        logger.error('Game', 'Error updating game state', { 
-          error: err, 
-          gameId, 
-          move 
-        })
-        toast.error("Failed to update game state")
-        return false
-      }
+    try {
+      const gameRef = doc(db, "games", gameId)
+      await updateDoc(gameRef, {
+        status: "finished",
+        winner: result.winner,
+        endTime: serverTimestamp()
+      })
+      toast.success(result.winner === myColor ? "You won!" : "You lost!")
+    } catch (error) {
+      logger.error('Game', 'Error updating game status', { error, gameId })
+      toast.error("Error updating game status!")
     }
   }
 
@@ -498,7 +227,7 @@ export default function Game() {
           <div className="w-[600px] h-[600px]">
       <Chessboard
         position={fen}
-              onDrop={onDrop}
+              onDrop={handleMove}
             />
           </div>
           {gameData?.status === "finished" && (
@@ -548,7 +277,7 @@ export default function Game() {
                 const gameRef = doc(db, "games", gameId)
                 
                 // If no player has joined yet, just refund the wager
-                if (!gameData.player2Id) {
+                if (!gameData.blackPlayer) {
                   try {
                     // Refund the wager to player1
                     const userRef = doc(db, "users", auth.currentUser.uid)
@@ -582,7 +311,7 @@ export default function Game() {
                   winner: otherColor
                 })
                 try {
-                  await handlePayout(otherColor)
+                  await handleTimeUp(otherColor)
                   toast.success("Game Over! You resigned.")
                 } catch (err) {
                   console.error("Payout error:", err)
@@ -591,10 +320,10 @@ export default function Game() {
               }}
               className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
             >
-              {gameData.player2Id ? "Resign" : "Cancel Game"}
+              {gameData.blackPlayer ? "Resign" : "Cancel Game"}
             </button>
 
-            {gameData.player2Id && (
+            {gameData.blackPlayer && (
               <button
                 onClick={async () => {
                   const gameRef = doc(db, "games", gameId)
@@ -603,7 +332,7 @@ export default function Game() {
                     winner: "draw"
                   })
                   try {
-                    await handleDrawRefund()
+                    await handleTimeUp("draw")
                     toast.success("Game Over! Draw accepted.")
                   } catch (err) {
                     console.error("Refund error:", err)

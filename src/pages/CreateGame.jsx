@@ -62,18 +62,18 @@ export default function CreateGame() {
 
       // First create the game
       const gameData = {
-        player1Id: auth.currentUser.uid,
-        player2Id: null,
+        whitePlayer: auth.currentUser.uid,
+        blackPlayer: null,
         pot: wagerAmount * 2,
         wager: wagerAmount,
         status: "waiting",
-        createdAt: serverTimestamp(),
-        currentFen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
         currentTurn: "w",
-        moveHistory: [],
-        whiteTime: 300000,
+        whiteTime: 300000, // 5 minutes in milliseconds
         blackTime: 300000,
-        lastMoveTimestamp: new Date()
+        moveHistory: [],
+        createdAt: serverTimestamp(),
+        lastMoveTime: serverTimestamp()
       }
 
       logger.debug('CreateGame', 'Creating game with data', { 
