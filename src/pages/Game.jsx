@@ -33,10 +33,12 @@ export default function Game() {
   const chessRef = useRef(null)
   const [fen, setFen] = useState("")
 
-  // Initialize Chess instance
+  // Initialize Chess instance only once
   useEffect(() => {
-    chessRef.current = new Chess()
-    setFen(chessRef.current.fen())
+    if (!chessRef.current) {
+      chessRef.current = new Chess()
+      setFen(chessRef.current.fen())
+    }
   }, [])
 
   useEffect(() => {
@@ -68,8 +70,11 @@ export default function Game() {
       // Load FEN into Chess instance and update state
       try {
         if (gameData.fen && chessRef.current) {
-          chessRef.current.load(gameData.fen)
-          setFen(gameData.fen)
+          // Only update if FEN is different to avoid unnecessary updates
+          if (chessRef.current.fen() !== gameData.fen) {
+            chessRef.current.load(gameData.fen)
+            setFen(gameData.fen)
+          }
         } else if (chessRef.current) {
           chessRef.current.reset()
           setFen(chessRef.current.fen())
@@ -150,9 +155,28 @@ export default function Game() {
     }
   }
 
-  const handleMove = async (moveObj) => {
+  // Update clock display when timeLeft changes
+  useEffect(() => {
+    if (gameData?.currentTurn === "w") {
+      setWhiteTimeDisplay(timeLeft)
+    } else {
+      setBlackTimeDisplay(timeLeft)
+    }
+  }, [timeLeft, gameData?.currentTurn])
+
+  // Handle game status changes
+  useEffect(() => {
+    if (gameData?.status === "finished") {
+      stopClock()
+    } else if (gameData?.status === "in_progress") {
+      startClock(gameData.currentTurn || "w", gameData.lastMoveTime?.toDate() || new Date())
+    }
+  }, [gameData?.status, gameData?.currentTurn, gameData?.lastMoveTime])
+
+  const handleMove = async (sourceSquare, targetSquare, piece) => {
     if (!gameData || gameData.status !== "in_progress" || !chessRef.current) return false
 
+    // Check if it's the player's turn
     const isPlayerTurn = (
       (gameData.currentTurn === "w" && gameData.whitePlayer === user.uid) ||
       (gameData.currentTurn === "b" && gameData.blackPlayer === user.uid)
@@ -162,9 +186,15 @@ export default function Game() {
       return false
     }
 
+    // Check if the piece being moved belongs to the current player
+    const pieceColor = piece[0] // 'w' or 'b'
+    if (pieceColor !== gameData.currentTurn) {
+      toast.error("You can only move your own pieces!")
+      return false
+    }
+
     try {
       // Validate move with Chess.js
-      const { sourceSquare, targetSquare } = moveObj
       const result = chessRef.current.move({
         from: sourceSquare,
         to: targetSquare,
@@ -180,21 +210,42 @@ export default function Game() {
       const newFen = chessRef.current.fen()
       const newTurn = gameData.currentTurn === "w" ? "b" : "w"
 
+      // Optimistically update local state
+      setFen(newFen)
+      setMoveHistory(prev => [...prev, {
+        number: moveHistory.length + 1,
+        white: result.color === "w" ? result.san : "",
+        black: result.color === "b" ? result.san : "",
+        timestamp: new Date().toISOString()
+      }])
+
       const gameRef = doc(db, "games", gameId)
       const now = new Date()
 
-      await updateDoc(gameRef, {
-        fen: newFen,
-        currentTurn: newTurn,
-        lastMoveTime: serverTimestamp(),
-        [`${newTurn === "w" ? "white" : "black"}Time`]: timeLeft,
-        moveHistory: arrayUnion({
-          number: moveHistory.length + 1,
-          white: result.color === "w" ? result.san : "",
-          black: result.color === "b" ? result.san : "",
-          timestamp: now.toISOString()
-        })
-      })
+      // Update Firestore with retry logic
+      let retries = 3
+      while (retries > 0) {
+        try {
+          await updateDoc(gameRef, {
+            fen: newFen,
+            currentTurn: newTurn,
+            lastMoveTime: serverTimestamp(),
+            [`${newTurn === "w" ? "white" : "black"}Time`]: timeLeft,
+            moveHistory: arrayUnion({
+              number: moveHistory.length + 1,
+              white: result.color === "w" ? result.san : "",
+              black: result.color === "b" ? result.san : "",
+              timestamp: now.toISOString()
+            })
+          })
+          break
+        } catch (error) {
+          retries--
+          if (retries === 0) throw error
+          // Wait before retrying
+          await new Promise(resolve => setTimeout(resolve, 1000))
+        }
+      }
 
       logger.debug('Game', 'Move made', { 
         gameId,
@@ -207,7 +258,12 @@ export default function Game() {
       return true
     } catch (error) {
       logger.error('Game', 'Error making move', { error, gameId })
-      toast.error("Error making move!")
+      // Revert optimistic update on error
+      if (chessRef.current) {
+        chessRef.current.undo()
+        setFen(chessRef.current.fen())
+      }
+      toast.error("Error making move! Please try again.")
       return false
     }
   }
@@ -223,14 +279,14 @@ export default function Game() {
   }
 
   return (
-    <div className="flex flex-col items-center">
+    <div className="flex flex-col items-center p-4">
       <h2 className="text-xl mb-4">Game ID: {gameId}</h2>
       {error && <p className="text-red-500 mb-2">{error}</p>}
       <p>Current Turn: {gameData?.currentTurn?.toUpperCase()}</p>
       <p>You are playing: {myColor === "w" ? "White" : "Black"}</p>
       <p className="text-green-600 font-semibold mb-2">Wager: ₹{gameData?.wager}</p>
 
-      <div className="flex gap-8 mb-4">
+      <div className="flex flex-col sm:flex-row gap-4 sm:gap-8 mb-4">
         <div className={`text-2xl font-bold ${gameData?.currentTurn === "w" ? "text-blue-600" : "text-gray-600"}`}>
           White: {formatTime(whiteTimeDisplay)}
         </div>
@@ -239,12 +295,18 @@ export default function Game() {
         </div>
       </div>
 
-      <div className="flex gap-8">
-        <div className={`relative ${gameData?.status === "finished" ? "opacity-50 pointer-events-none" : ""}`}>
-          <div className="w-[600px] h-[600px]">
+      <div className="flex flex-col lg:flex-row gap-4 lg:gap-8 w-full max-w-7xl">
+        <div className={`relative flex-1 ${gameData?.status === "finished" ? "opacity-50 pointer-events-none" : ""}`}>
+          <div className="w-full max-w-[600px] aspect-square mx-auto">
             <Chessboard
               position={fen}
-              onDrop={handleMove}
+              onPieceDrop={handleMove}
+              boardOrientation={myColor === "w" ? "white" : "black"}
+              boardWidth={Math.min(window.innerWidth * 0.8, 600)}
+              customBoardStyle={{
+                borderRadius: '4px',
+                boxShadow: '0 2px 10px rgba(0, 0, 0, 0.3)'
+              }}
             />
           </div>
           {gameData?.status === "finished" && (
@@ -262,9 +324,9 @@ export default function Game() {
           )}
         </div>
 
-        <div className="w-64 bg-white p-4 rounded-lg shadow">
+        <div className="w-full lg:w-64 bg-white p-4 rounded-lg shadow">
           <h3 className="text-lg font-semibold mb-2">Move History</h3>
-          <div className="space-y-1 max-h-[400px] overflow-y-auto">
+          <div className="space-y-1 max-h-[300px] lg:max-h-[400px] overflow-y-auto">
             {moveHistory.map((move, index) => (
               <div key={index} className="flex justify-between items-center text-sm">
                 <span className="font-medium">{move.number}.</span>
@@ -285,6 +347,27 @@ export default function Game() {
         >
           Leave Game
         </button>
+        {gameData?.status === "waiting" && gameData?.whitePlayer === user.uid && (
+          <button
+            onClick={async () => {
+              try {
+                const gameRef = doc(db, "games", gameId)
+                await updateDoc(gameRef, {
+                  status: "cancelled",
+                  endTime: serverTimestamp()
+                })
+                toast.success("Game cancelled")
+                navigate("/")
+              } catch (error) {
+                logger.error('Game', 'Error cancelling game', { error, gameId })
+                toast.error("Error cancelling game!")
+              }
+            }}
+            className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
+          >
+            Cancel Game
+          </button>
+        )}
       </div>
     </div>
   )
