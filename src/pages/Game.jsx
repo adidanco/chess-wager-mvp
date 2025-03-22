@@ -440,10 +440,12 @@ export default function Game() {
 
       <div className="flex gap-8">
         <div className={`relative ${gameData?.status === "finished" ? "opacity-50 pointer-events-none" : ""}`}>
-          <Chessboard
-            position={fen}
-            onDrop={onDrop}
-          />
+          <div className="w-[600px] h-[600px]">
+            <Chessboard
+              position={fen}
+              onDrop={onDrop}
+            />
+          </div>
           {gameData?.status === "finished" && (
             <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded-lg">
               <div className="bg-white p-6 rounded-lg text-center">
