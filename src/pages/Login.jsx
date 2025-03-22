@@ -34,7 +34,7 @@ export default function Login() {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
+    <div className="min-h-screen flex items-center justify-center bg-gray-100">
       <div className="bg-white p-8 rounded-lg shadow-md w-96">
         <h2 className="text-2xl font-bold mb-6 text-center">Login</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -77,6 +77,9 @@ export default function Login() {
             Create Account
           </button>
         </form>
+        <div className="mt-6 text-center">
+          <div className="text-pink-500 font-bold text-xl bg-white/80 px-3 py-1 rounded-full shadow-sm inline-block">Boo Boo ❤️</div>
+        </div>
       </div>
     </div>
   )

@@ -148,6 +148,42 @@ export default function Game() {
         winner: winner,
         endTime: serverTimestamp()
       })
+
+      // Handle wager distribution
+      if (winner !== "draw") {
+        const winnerId = winner === "w" ? gameData.whitePlayer : gameData.blackPlayer
+        const userRef = doc(db, "users", winnerId)
+        const userSnap = await getDoc(userRef)
+        if (userSnap.exists()) {
+          const userData = userSnap.data()
+          await updateDoc(userRef, {
+            balance: (userData.balance || 0) + gameData.wager * 2 // Winner gets double the wager
+          })
+        }
+      } else {
+        // Refund wagers for draw
+        const whiteUserRef = doc(db, "users", gameData.whitePlayer)
+        const blackUserRef = doc(db, "users", gameData.blackPlayer)
+        const [whiteSnap, blackSnap] = await Promise.all([
+          getDoc(whiteUserRef),
+          getDoc(blackUserRef)
+        ])
+        
+        if (whiteSnap.exists()) {
+          const whiteData = whiteSnap.data()
+          await updateDoc(whiteUserRef, {
+            balance: (whiteData.balance || 0) + gameData.wager
+          })
+        }
+        
+        if (blackSnap.exists()) {
+          const blackData = blackSnap.data()
+          await updateDoc(blackUserRef, {
+            balance: (blackData.balance || 0) + gameData.wager
+          })
+        }
+      }
+
       toast.success(winner === myColor ? "You won on time!" : "You lost on time!")
     } catch (error) {
       logger.error('Game', 'Error updating game status for time up', { error, gameId })
@@ -367,6 +403,119 @@ export default function Game() {
           >
             Cancel Game
           </button>
+        )}
+        {gameData?.status === "in_progress" && (
+          <>
+            <button
+              onClick={async () => {
+                try {
+                  const gameRef = doc(db, "games", gameId)
+                  await updateDoc(gameRef, {
+                    status: "finished",
+                    winner: "draw",
+                    endTime: serverTimestamp()
+                  })
+
+                  // Refund wagers for draw
+                  const whiteUserRef = doc(db, "users", gameData.whitePlayer)
+                  const blackUserRef = doc(db, "users", gameData.blackPlayer)
+                  const [whiteSnap, blackSnap] = await Promise.all([
+                    getDoc(whiteUserRef),
+                    getDoc(blackUserRef)
+                  ])
+                  
+                  if (whiteSnap.exists()) {
+                    const whiteData = whiteSnap.data()
+                    await updateDoc(whiteUserRef, {
+                      balance: (whiteData.balance || 0) + gameData.wager
+                    })
+                  }
+                  
+                  if (blackSnap.exists()) {
+                    const blackData = blackSnap.data()
+                    await updateDoc(blackUserRef, {
+                      balance: (blackData.balance || 0) + gameData.wager
+                    })
+                  }
+
+                  toast.success("Game ended in a draw!")
+                  navigate("/")
+                } catch (error) {
+                  logger.error('Game', 'Error declaring draw', { error, gameId })
+                  toast.error("Error declaring draw!")
+                }
+              }}
+              className="bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600"
+            >
+              Offer Draw
+            </button>
+            <button
+              onClick={async () => {
+                try {
+                  const winner = gameData.currentTurn === "w" ? "b" : "w"
+                  const gameRef = doc(db, "games", gameId)
+                  await updateDoc(gameRef, {
+                    status: "finished",
+                    winner: winner,
+                    endTime: serverTimestamp()
+                  })
+
+                  // Handle wager distribution for resignation
+                  const winnerId = winner === "w" ? gameData.whitePlayer : gameData.blackPlayer
+                  const userRef = doc(db, "users", winnerId)
+                  const userSnap = await getDoc(userRef)
+                  if (userSnap.exists()) {
+                    const userData = userSnap.data()
+                    await updateDoc(userRef, {
+                      balance: (userData.balance || 0) + gameData.wager * 2 // Winner gets double the wager
+                    })
+                  }
+
+                  toast.success("You resigned!")
+                  navigate("/")
+                } catch (error) {
+                  logger.error('Game', 'Error resigning', { error, gameId })
+                  toast.error("Error resigning!")
+                }
+              }}
+              className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
+            >
+              Resign
+            </button>
+            <button
+              onClick={async () => {
+                try {
+                  const winner = gameData.currentTurn === "w" ? "w" : "b"
+                  const gameRef = doc(db, "games", gameId)
+                  await updateDoc(gameRef, {
+                    status: "finished",
+                    winner: winner,
+                    endTime: serverTimestamp()
+                  })
+
+                  // Handle wager distribution for win
+                  const winnerId = winner === "w" ? gameData.whitePlayer : gameData.blackPlayer
+                  const userRef = doc(db, "users", winnerId)
+                  const userSnap = await getDoc(userRef)
+                  if (userSnap.exists()) {
+                    const userData = userSnap.data()
+                    await updateDoc(userRef, {
+                      balance: (userData.balance || 0) + gameData.wager * 2 // Winner gets double the wager
+                    })
+                  }
+
+                  toast.success("You won!")
+                  navigate("/")
+                } catch (error) {
+                  logger.error('Game', 'Error declaring win', { error, gameId })
+                  toast.error("Error declaring win!")
+                }
+              }}
+              className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
+            >
+              SAMPLE BUTTON TO DECLARE WIN
+            </button>
+          </>
         )}
       </div>
     </div>
