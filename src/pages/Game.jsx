@@ -28,6 +28,8 @@ export default function Game() {
   const [moveHistory, setMoveHistory] = useState([])
   const [whiteTimeDisplay, setWhiteTimeDisplay] = useState(300000)
   const [blackTimeDisplay, setBlackTimeDisplay] = useState(300000)
+  const clockStartedRef = useRef(false)
+  const intervalId = useRef(null)
 
   useEffect(() => {
     if (!gameId) {
@@ -48,7 +50,7 @@ export default function Game() {
 
     // Initialize chess instance
     chessRef.current = new Chess()
-
+    
     // Subscribe to game updates
     const gameRef = doc(db, "games", gameId)
     const unsubscribe = onSnapshot(gameRef, (doc) => {
@@ -62,7 +64,7 @@ export default function Game() {
 
       const data = doc.data()
       setGameData(data)
-      setFen(data.currentFen)
+          setFen(data.currentFen)
       setMoveHistory(data.moveHistory || [])
       setWhiteTimeDisplay(data.whiteTime || 300000)
       setBlackTimeDisplay(data.blackTime || 300000)
@@ -79,9 +81,30 @@ export default function Game() {
       toast.error("Error loading game!")
       navigate("/")
     })
-
+    
     return () => unsubscribe()
   }, [gameId, navigate, user])
+
+  // Start clock when game is ongoing
+  useEffect(() => {
+    if (!gameData) return
+    if (gameData.status !== "ongoing") {
+      logger.debug('Game', 'Game not in progress, clock stopped', { 
+        gameId, 
+        status: gameData.status 
+      })
+      return
+    }
+
+    logger.debug('Game', 'Starting clock tick', { gameId })
+    startClockTick()
+    clockStartedRef.current = true
+
+    return () => {
+      logger.debug('Game', 'Cleaning up clock tick', { gameId })
+      clearInterval(intervalId.current)
+    }
+  }, [gameData, gameId])
 
   // Helper function to handle payouts
   const handlePayout = async (winnerColor) => {
@@ -187,17 +210,54 @@ export default function Game() {
     }
   }
 
-  // Add clock tick effect
-  useEffect(() => {
-    if (!gameData || gameData.status === "finished") return
+  const startClockTick = () => {
+    if (!gameData) return
+    if (gameData.status !== "ongoing") return
 
-    logger.debug('Game', 'Starting clock tick', { 
-      currentTurn: gameData.currentTurn,
-      whiteTime: gameData.whiteTime,
-      blackTime: gameData.blackTime
-    })
+    logger.debug('Game', 'Starting clock tick', { gameId })
 
-    const intervalId = setInterval(() => {
+    const now = Date.now()
+    const elapsed = now - gameData.lastMoveTimestamp?.toDate().getTime()
+
+    let whiteDisplay = gameData.whiteTime
+    let blackDisplay = gameData.blackTime
+
+    if (gameData.currentTurn === "w") {
+      whiteDisplay = Math.max(0, whiteDisplay - elapsed)
+    } else {
+      blackDisplay = Math.max(0, blackDisplay - elapsed)
+    }
+
+    setWhiteTimeDisplay(whiteDisplay)
+    setBlackTimeDisplay(blackDisplay)
+
+    // Check for time out
+    if (whiteDisplay <= 0 || blackDisplay <= 0) {
+      const loserColor = whiteDisplay <= 0 ? "w" : "b"
+      const winnerColor = loserColor === "w" ? "b" : "w"
+      
+      logger.info('Game', 'Time out detected', { 
+        gameId, 
+        loserColor, 
+        winnerColor,
+        whiteTime: whiteDisplay,
+        blackTime: blackDisplay
+      })
+      
+      const gameRef = doc(db, "games", gameId)
+      updateDoc(gameRef, {
+        status: "finished",
+        winner: winnerColor
+      }).then(() => {
+        handlePayout(winnerColor)
+        toast.success(`Game Over! ${winnerColor === "w" ? "White" : "Black"} wins on time!`)
+      }).catch(err => {
+        logger.error('Game', 'Error handling time out', { error: err, gameId })
+        toast.error("Error processing time out")
+      })
+    }
+
+    intervalId.current = setInterval(() => {
       const now = Date.now()
       const elapsed = now - gameData.lastMoveTimestamp?.toDate().getTime()
 
@@ -239,12 +299,7 @@ export default function Game() {
         })
       }
     }, 100)
-
-    return () => {
-      logger.debug('Game', 'Cleaning up clock tick', { gameId })
-      clearInterval(intervalId)
-    }
-  }, [gameData, gameId])
+  }
 
   const onDrop = async (sourceSquare, targetSquare) => {
     logger.debug('Game', 'Attempting move', { 
@@ -304,7 +359,7 @@ export default function Game() {
       return false
     } else {
       try {
-        const newFen = chessRef.current.fen()
+      const newFen = chessRef.current.fen()
         const nextTurn = (myColor === "w") ? "b" : "w"
         const pgn = chessRef.current.pgn()
         const newMoveHistory = [...moveHistory, {
@@ -336,7 +391,7 @@ export default function Game() {
           blackTime: newBlackTime
         })
 
-        const gameRef = doc(db, "games", gameId)
+      const gameRef = doc(db, "games", gameId)
         await updateDoc(gameRef, {
           currentFen: newFen,
           currentTurn: nextTurn,
@@ -395,7 +450,7 @@ export default function Game() {
           }
         }
 
-        return true
+      return true
       } catch (err) {
         logger.error('Game', 'Error updating game state', { 
           error: err, 
@@ -441,8 +496,8 @@ export default function Game() {
       <div className="flex gap-8">
         <div className={`relative ${gameData?.status === "finished" ? "opacity-50 pointer-events-none" : ""}`}>
           <div className="w-[600px] h-[600px]">
-            <Chessboard
-              position={fen}
+      <Chessboard
+        position={fen}
               onDrop={onDrop}
             />
           </div>

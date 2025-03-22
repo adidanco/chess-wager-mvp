@@ -1,4 +1,4 @@
-// ✅ ADDED: CreateGame page
+// CreateGame.jsx
 import React, { useEffect, useState } from "react"  
 import { collection, addDoc, doc, getDoc, serverTimestamp, increment, runTransaction, deleteDoc } from "firebase/firestore"
 import { auth, db } from "../firebase"
@@ -75,6 +75,11 @@ export default function CreateGame() {
         blackTime: 300000,
         lastMoveTimestamp: new Date()
       }
+
+      logger.debug('CreateGame', 'Creating game with data', { 
+        gameData,
+        userId: auth.currentUser.uid
+      })
 
       const gamesRef = collection(db, "games")
       const newGameDoc = await addDoc(gamesRef, gameData)

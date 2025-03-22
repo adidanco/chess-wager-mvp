@@ -1,3 +1,4 @@
+//JoinGame.jsx
 // ✅ ADDED: JoinGame page
 import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
@@ -53,14 +54,26 @@ export default function JoinGame() {
     const q = query(
       collection(db, "games"),
       where("status", "==", "waiting"),
-      where("player1Id", "!=", auth.currentUser.uid)
+      where("player1Id", "not-in", [auth.currentUser.uid, null])
     )
+
+    logger.debug('JoinGame', 'Setting up games query', { 
+      userId: auth.currentUser.uid,
+      query: q
+    })
 
     const unsubscribe = onSnapshot(q, 
       (snapshot) => {
         const games = []
         snapshot.forEach((doc) => {
-          games.push({ id: doc.id, ...doc.data() })
+          const gameData = doc.data()
+          logger.debug('JoinGame', 'Found game', { 
+            gameId: doc.id,
+            status: gameData.status,
+            player1Id: gameData.player1Id,
+            player2Id: gameData.player2Id
+          })
+          games.push({ id: doc.id, ...gameData })
         })
         logger.debug('JoinGame', 'Available games updated', { 
           count: games.length,
