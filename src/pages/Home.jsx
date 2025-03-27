@@ -64,7 +64,7 @@ export default function Home() {
         amount
       })
 
-      toast.success(`Successfully deposited $${amount}`)
+      toast.success(`Successfully deposited ₹${amount}`)
       setShowDepositOptions(false)
     } catch (error) {
       logger.error('Home', 'Error processing deposit', { error })
@@ -118,7 +118,7 @@ export default function Home() {
 
             <div className="mb-8">
               <h3 className="text-lg font-semibold mb-2">Balance</h3>
-              <div className="text-2xl text-green-600 font-bold">${userData?.balance?.toFixed(2) || '0.00'}</div>
+              <div className="text-2xl text-green-600 font-bold">₹{userData?.balance?.toFixed(2) || '0.00'}</div>
               <div className="relative">
                 <button
                   onClick={() => setShowDepositOptions(!showDepositOptions)}
@@ -134,7 +134,7 @@ export default function Home() {
                         onClick={() => handleDeposit(amount)}
                         className="w-full px-4 py-2 text-left hover:bg-gray-100 focus:outline-none"
                       >
-                        ${amount}
+                        ₹{amount}
                       </button>
                     ))}
                   </div>

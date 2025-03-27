@@ -77,8 +77,7 @@ export default function CreateGame() {
         currentTurn: "w",
         whiteTime: 300000,
         blackTime: 300000,
-        moveHistory: [],
-        lastMoveTime: serverTimestamp()
+        moveHistory: []
       })
 
       // Deduct wager from user's balance
@@ -122,7 +121,7 @@ export default function CreateGame() {
             />
             {userBalance !== null && (
               <p className="mt-1 text-sm text-gray-500">
-                Your balance: ${userBalance.toFixed(2)}
+                Your balance: ₹{userBalance.toFixed(2)}
               </p>
             )}
           </div>

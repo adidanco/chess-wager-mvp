@@ -2,7 +2,7 @@
 // ✅ ADDED: JoinGame page
 import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { collection, query, where, onSnapshot, doc, updateDoc, getDoc, increment, orderBy } from "firebase/firestore"
+import { collection, query, where, onSnapshot, doc, updateDoc, getDoc, increment, orderBy, serverTimestamp } from "firebase/firestore"
 import { db, auth } from "../firebase"
 import toast from "react-hot-toast"
 import { logger } from "../utils/logger"
@@ -149,7 +149,12 @@ export default function JoinGame() {
       await updateDoc(gameRef, {
         blackPlayer: auth.currentUser.uid,
         status: "in_progress",
-        pot: gameData.pot + wager
+        pot: gameData.pot + wager,
+        // Initialize game state
+        whiteTime: 300000,
+        blackTime: 300000,
+        currentTurn: "w",
+        lastMoveTime: serverTimestamp()
       })
 
       logger.debug('JoinGame', 'Game document updated', { 
@@ -198,7 +203,9 @@ export default function JoinGame() {
                 className="flex justify-between items-center p-4 border rounded-lg hover:bg-gray-50"
               >
                 <div>
-                  <p className="font-medium">Wager: ${game.wager}</p>
+                  <div className="text-lg font-semibold text-green-600">
+                    Wager: ₹{game.wager}
+                  </div>
                   <p className="text-sm text-gray-500">
                     Created: {new Date(game.createdAt?.toDate()).toLocaleString()}
                   </p>

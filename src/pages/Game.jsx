@@ -24,12 +24,15 @@ export default function Game() {
   const [myColor, setMyColor] = useState(null)
   const [error, setError] = useState(null)
   const [moveHistory, setMoveHistory] = useState([])
-  const [whiteTimeDisplay, setWhiteTimeDisplay] = useState(300000)
-  const [blackTimeDisplay, setBlackTimeDisplay] = useState(300000)
-  const [timeLeft, setTimeLeft] = useState(300000)
-  const [clockInterval, setClockInterval] = useState(null)
-  
-  // Create a single Chess instance and store it in a ref
+
+  // We store each player's leftover time in ms:
+  const [whiteLocalTime, setWhiteLocalTime] = useState(300000) // 5 min
+  const [blackLocalTime, setBlackLocalTime] = useState(300000) // 5 min
+
+  // We'll have one interval for the active side
+  const clockIntervalRef = useRef(null)
+
+  // Single Chess instance
   const chessRef = useRef(null)
   const [fen, setFen] = useState("")
 
@@ -41,149 +44,89 @@ export default function Game() {
     }
   }, [])
 
-  useEffect(() => {
-    if (!gameId || !user) return
+  // Stop any ticking clock
+  function stopClock() {
+    if (clockIntervalRef.current) {
+      clearInterval(clockIntervalRef.current)
+      clockIntervalRef.current = null
+    }
+  }
 
-    logger.info('Game', 'Initializing game component', { gameId, userId: user.uid })
+  // Start a local clock for whichever side is active
+  function startClockForActiveSide(activeSide) {
+    stopClock() // Just to be sure
+    // We'll track last tick in a ref so we know how many ms pass each interval
+    let lastTick = Date.now()
 
-    // Subscribe to game updates
-    const gameRef = doc(db, "games", gameId)
-    const unsubscribe = onSnapshot(gameRef, (doc) => {
-      if (!doc.exists()) {
-        logger.error('Game', 'Game document not found', { gameId })
-        toast.error("Game not found!")
-        navigate("/")
-        return
-      }
+    clockIntervalRef.current = setInterval(() => {
+      const now = Date.now()
+      const elapsed = now - lastTick
+      lastTick = now
 
-      const gameData = doc.data()
-      logger.debug('Game', 'Game data updated', { 
-        gameId,
-        status: gameData.status,
-        currentTurn: gameData.currentTurn,
-        whitePlayer: gameData.whitePlayer,
-        blackPlayer: gameData.blackPlayer
-      })
-
-      setGameData(gameData)
-
-      // Load FEN into Chess instance and update state
-      try {
-        if (gameData.fen && chessRef.current) {
-          // Only update if FEN is different to avoid unnecessary updates
-          if (chessRef.current.fen() !== gameData.fen) {
-            chessRef.current.load(gameData.fen)
-            setFen(gameData.fen)
+      if (activeSide === "w") {
+        setWhiteLocalTime((prev) => {
+          const nextVal = Math.max(0, prev - elapsed)
+          if (nextVal <= 0) {
+            clearInterval(clockIntervalRef.current)
+            clockIntervalRef.current = null
+            handleTimeUp("b") // If white hits 0, black wins
+            return 0
           }
-        } else if (chessRef.current) {
-          chessRef.current.reset()
-          setFen(chessRef.current.fen())
-        }
-      } catch (error) {
-        logger.error('Game', 'Error loading FEN', { error, gameId })
-        toast.error("Error loading game position!")
-      }
-
-      setMyColor(gameData.whitePlayer === user.uid ? "w" : "b")
-      setError(null)
-      setMoveHistory(gameData.moveHistory || [])
-      setWhiteTimeDisplay(gameData.whiteTime || 300000)
-      setBlackTimeDisplay(gameData.blackTime || 300000)
-
-      // Start clock if game is in progress
-      if (gameData.status === "in_progress") {
-        startClock(gameData.currentTurn || "w", gameData.lastMoveTime?.toDate() || new Date())
+          return nextVal
+        })
       } else {
-        stopClock()
+        setBlackLocalTime((prev) => {
+          const nextVal = Math.max(0, prev - elapsed)
+          if (nextVal <= 0) {
+            clearInterval(clockIntervalRef.current)
+            clockIntervalRef.current = null
+            handleTimeUp("w") // If black hits 0, white wins
+            return 0
+          }
+          return nextVal
+        })
       }
-    })
-
-    return () => {
-      logger.debug('Game', 'Cleaning up game component', { gameId })
-      unsubscribe()
-      stopClock()
-    }
-  }, [gameId, user, navigate])
-
-  const startClock = (turn, lastMoveTime) => {
-    stopClock()
-    const now = new Date()
-    const elapsed = Math.floor((now - lastMoveTime) / 1000)
-    const initialTime = turn === "w" ? whiteTimeDisplay : blackTimeDisplay
-    const remainingTime = Math.max(0, initialTime - elapsed)
-
-    if (remainingTime <= 0) {
-      handleTimeUp(turn === "w" ? "b" : "w")
-      return
-    }
-
-    setTimeLeft(remainingTime)
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer)
-          handleTimeUp(turn === "w" ? "b" : "w")
-          return 0
-        }
-        return prev - 1
-      })
-    }, 1000)
-
-    setClockInterval(timer)
+    }, 250) // update 4 times/sec for smoother countdown
   }
 
-  const stopClock = () => {
-    if (clockInterval) {
-      clearInterval(clockInterval)
-      setClockInterval(null)
-    }
-  }
-
-  const handleTimeUp = async (winner) => {
+  // Handle time up
+  async function handleTimeUp(winner) {
     stopClock()
     try {
+      if (!gameData) return
+
       const gameRef = doc(db, "games", gameId)
-      await updateDoc(gameRef, {
+      // If currentTurn was 'w', we set whiteTime = 0, etc.
+      const updateData = {
         status: "finished",
         winner: winner,
-        endTime: serverTimestamp()
-      })
+        endTime: serverTimestamp(),
+      }
 
-      // Handle wager distribution
+      // Optionally store leftover for the side that didn't lose on time
+      // For the side that lost, set to 0
+      if (gameData.currentTurn === "w") {
+        updateData.whiteTime = 0
+        updateData.blackTime = gameData.blackTime
+      } else {
+        updateData.blackTime = 0
+        updateData.whiteTime = gameData.whiteTime
+      }
+
+      await updateDoc(gameRef, updateData)
+
+      // Wager distribution
       if (winner !== "draw") {
-        const winnerId = winner === "w" ? gameData.whitePlayer : gameData.blackPlayer
+        const winnerId = (winner === "w") ? gameData.whitePlayer : gameData.blackPlayer
         const userRef = doc(db, "users", winnerId)
         const userSnap = await getDoc(userRef)
         if (userSnap.exists()) {
           const userData = userSnap.data()
           await updateDoc(userRef, {
-            balance: (userData.balance || 0) + gameData.wager * 2 // Winner gets double the wager
-          })
-        }
-      } else {
-        // Refund wagers for draw
-        const whiteUserRef = doc(db, "users", gameData.whitePlayer)
-        const blackUserRef = doc(db, "users", gameData.blackPlayer)
-        const [whiteSnap, blackSnap] = await Promise.all([
-          getDoc(whiteUserRef),
-          getDoc(blackUserRef)
-        ])
-        
-        if (whiteSnap.exists()) {
-          const whiteData = whiteSnap.data()
-          await updateDoc(whiteUserRef, {
-            balance: (whiteData.balance || 0) + gameData.wager
-          })
-        }
-        
-        if (blackSnap.exists()) {
-          const blackData = blackSnap.data()
-          await updateDoc(blackUserRef, {
-            balance: (blackData.balance || 0) + gameData.wager
+            balance: (userData.balance || 0) + gameData.wager * 2
           })
         }
       }
-
       toast.success(winner === myColor ? "You won on time!" : "You lost on time!")
     } catch (error) {
       logger.error('Game', 'Error updating game status for time up', { error, gameId })
@@ -191,28 +134,104 @@ export default function Game() {
     }
   }
 
-  // Update clock display when timeLeft changes
+  // Firestore subscription
   useEffect(() => {
-    if (gameData?.currentTurn === "w") {
-      setWhiteTimeDisplay(timeLeft)
-    } else {
-      setBlackTimeDisplay(timeLeft)
-    }
-  }, [timeLeft, gameData?.currentTurn])
+    if (!gameId || !user) return
 
-  // Handle game status changes
-  useEffect(() => {
-    if (gameData?.status === "finished") {
+    logger.info('Game', 'Initializing game component', { gameId, userId: user.uid })
+    const gameRef = doc(db, "games", gameId)
+    const unsubscribe = onSnapshot(gameRef, (snapshot) => {
+      if (!snapshot.exists()) {
+        logger.error('Game', 'Game document not found', { gameId })
+        toast.error("Game not found!")
+        navigate("/")
+        return
+      }
+
+      const newData = snapshot.data()
+      setGameData(newData)
+
+      // Load FEN
+      try {
+        if (newData.fen && chessRef.current) {
+          if (chessRef.current.fen() !== newData.fen) {
+            chessRef.current.load(newData.fen)
+            setFen(newData.fen)
+          }
+        } else if (chessRef.current) {
+          chessRef.current.reset()
+          setFen(chessRef.current.fen())
+        }
+      } catch (err) {
+        logger.error('Game', 'Error loading FEN', { err, gameId })
+        toast.error("Error loading game position!")
+      }
+
+      setMyColor(newData.whitePlayer === user.uid ? "w" : "b")
+      setError(null)
+      setMoveHistory(newData.moveHistory || [])
+
+      // If game is not in progress or both players haven't joined, stop clock
+      if (newData.status !== "in_progress" || !newData.whitePlayer || !newData.blackPlayer) {
+        stopClock()
+        return
+      }
+
+      // Only update times if they've changed in Firestore
+      // This prevents resetting times on every snapshot
+      if (newData.whiteTime !== gameData?.whiteTime || newData.blackTime !== gameData?.blackTime) {
+        // 1) Grab leftover times from doc in ms
+        const docWhiteTime = newData.whiteTime ?? 300000
+        const docBlackTime = newData.blackTime ?? 300000
+
+        // 2) Compute how long since last move
+        let elapsed = 0
+        if (newData.lastMoveTime) {
+          const lastMoveMillis = newData.lastMoveTime.toDate().getTime()
+          const now = Date.now()
+          elapsed = now - lastMoveMillis
+        }
+
+        // 3) If doc says it's white's turn, we reduce white's doc leftover by elapsed
+        //    black stays frozen at docBlackTime
+        if (newData.currentTurn === 'w') {
+          const newWhiteLocal = Math.max(0, docWhiteTime - elapsed)
+          setWhiteLocalTime(newWhiteLocal)
+          setBlackLocalTime(docBlackTime) // freeze black
+          // Then start ticking white only
+          stopClock()
+          startClockForActiveSide('w')
+        } else {
+          // black's turn
+          const newBlackLocal = Math.max(0, docBlackTime - elapsed)
+          setBlackLocalTime(newBlackLocal)
+          setWhiteLocalTime(docWhiteTime) // freeze white
+          stopClock()
+          startClockForActiveSide('b')
+        }
+      } else if (newData.currentTurn !== gameData?.currentTurn) {
+        // If only the turn changed, just switch which clock is ticking
+        stopClock()
+        startClockForActiveSide(newData.currentTurn)
+      } else if (newData.status === "in_progress" && gameData?.status !== "in_progress" && newData.whitePlayer && newData.blackPlayer) {
+        // Game just started and both players have joined, initialize times to 5 minutes
+        setWhiteLocalTime(300000)
+        setBlackLocalTime(300000)
+        // Start clock for white (first player)
+        stopClock()
+        startClockForActiveSide('w')
+      }
+    })
+
+    return () => {
+      unsubscribe()
       stopClock()
-    } else if (gameData?.status === "in_progress") {
-      startClock(gameData.currentTurn || "w", gameData.lastMoveTime?.toDate() || new Date())
     }
-  }, [gameData?.status, gameData?.currentTurn, gameData?.lastMoveTime])
+  }, [gameId, user, navigate])
 
-  const handleMove = async (sourceSquare, targetSquare, piece) => {
+  async function handleMove(sourceSquare, targetSquare, piece) {
     if (!gameData || gameData.status !== "in_progress" || !chessRef.current) return false
 
-    // Check if it's the player's turn
     const isPlayerTurn = (
       (gameData.currentTurn === "w" && gameData.whitePlayer === user.uid) ||
       (gameData.currentTurn === "b" && gameData.blackPlayer === user.uid)
@@ -222,7 +241,6 @@ export default function Game() {
       return false
     }
 
-    // Check if the piece being moved belongs to the current player
     const pieceColor = piece[0] // 'w' or 'b'
     if (pieceColor !== gameData.currentTurn) {
       toast.error("You can only move your own pieces!")
@@ -230,41 +248,58 @@ export default function Game() {
     }
 
     try {
-      // Validate move with Chess.js
-      const result = chessRef.current.move({
-        from: sourceSquare,
-        to: targetSquare,
-        promotion: 'q' // Always promote to queen for simplicity
-      })
+      // Stop the local clock while we finalize the move
+      stopClock()
 
+      const result = chessRef.current.move({
+      from: sourceSquare,
+      to: targetSquare,
+        promotion: 'q'
+      })
       if (result === null) {
         toast.error("Illegal move!")
+        // If illegal, restart the clock for the same side
+        if (gameData.currentTurn) {
+          startClockForActiveSide(gameData.currentTurn)
+        }
         return false
       }
 
-      // Check for checkmate or draw
       const isCheckmate = chessRef.current.isCheckmate()
       const isDraw = chessRef.current.isDraw()
-      const gameStatus = isCheckmate ? "finished" : isDraw ? "finished" : "in_progress"
-      const winner = isCheckmate ? gameData.currentTurn : isDraw ? "draw" : null
+      const gameStatus = isCheckmate ? "finished" : (isDraw ? "finished" : "in_progress")
+      const winner = isCheckmate ? gameData.currentTurn : (isDraw ? "draw" : null)
 
-      // Get new position from Chess instance
       const newFen = chessRef.current.fen()
-      const newTurn = gameData.currentTurn === "w" ? "b" : "w"
+      const finishingSide = gameData.currentTurn // e.g. 'w'
+      const newTurn = (finishingSide === 'w') ? 'b' : 'w'
 
-      // Optimistically update local state
+      // Store both players' current times
+      const finishingTime = (finishingSide === 'w')
+        ? whiteLocalTime
+        : blackLocalTime
+
+      // Store the other player's time from local state too
+      const otherSideTime = (finishingSide === 'w')
+        ? blackLocalTime
+        : whiteLocalTime
+
+      // Update local state for Fen or history
       setFen(newFen)
-      setMoveHistory(prev => [...prev, {
-        number: moveHistory.length + 1,
-        white: result.color === "w" ? result.san : "",
-        black: result.color === "b" ? result.san : "",
-        timestamp: new Date().toISOString()
-      }])
+      setMoveHistory(prev => [
+        ...prev,
+        {
+          number: prev.length + 1,
+          white: (result.color === 'w') ? result.san : '',
+          black: (result.color === 'b') ? result.san : '',
+          timestamp: new Date().toISOString()
+        }
+      ])
 
-      const gameRef = doc(db, "games", gameId)
       const now = new Date()
+      const gameRef = doc(db, "games", gameId)
 
-      // Update Firestore with retry logic
+      // We'll do a simple updateDoc
       let retries = 3
       while (retries > 0) {
         try {
@@ -272,7 +307,9 @@ export default function Game() {
             fen: newFen,
             currentTurn: newTurn,
             lastMoveTime: serverTimestamp(),
-            [`${newTurn === "w" ? "white" : "black"}Time`]: timeLeft,
+            // Store both players' times
+            whiteTime: finishingSide === 'w' ? finishingTime : otherSideTime,
+            blackTime: finishingSide === 'b' ? finishingTime : otherSideTime,
             moveHistory: arrayUnion({
               number: moveHistory.length + 1,
               white: result.color === "w" ? result.san : "",
@@ -286,24 +323,21 @@ export default function Game() {
             } : {})
           })
 
-          // Handle wager distribution if game ended
+          // If ended, handle payouts
           if (isCheckmate || isDraw) {
             if (winner === "draw") {
-              // Refund wagers for draw
               const whiteUserRef = doc(db, "users", gameData.whitePlayer)
               const blackUserRef = doc(db, "users", gameData.blackPlayer)
               const [whiteSnap, blackSnap] = await Promise.all([
                 getDoc(whiteUserRef),
                 getDoc(blackUserRef)
               ])
-              
               if (whiteSnap.exists()) {
                 const whiteData = whiteSnap.data()
                 await updateDoc(whiteUserRef, {
                   balance: (whiteData.balance || 0) + gameData.wager
                 })
               }
-              
               if (blackSnap.exists()) {
                 const blackData = blackSnap.data()
                 await updateDoc(blackUserRef, {
@@ -312,8 +346,7 @@ export default function Game() {
               }
               toast.success("Game ended in a draw!")
             } else {
-              // Winner gets double the wager
-              const winnerId = winner === "w" ? gameData.whitePlayer : gameData.blackPlayer
+              const winnerId = (winner === "w") ? gameData.whitePlayer : gameData.blackPlayer
               const userRef = doc(db, "users", winnerId)
               const userSnap = await getDoc(userRef)
               if (userSnap.exists()) {
@@ -329,28 +362,22 @@ export default function Game() {
         } catch (error) {
           retries--
           if (retries === 0) throw error
-          // Wait before retrying
           await new Promise(resolve => setTimeout(resolve, 1000))
         }
       }
 
-      logger.debug('Game', 'Move made', { 
-        gameId,
-        move: result.san,
-        newTurn,
-        timeLeft
-      })
-
-      startClock(newTurn, now)
       return true
     } catch (error) {
       logger.error('Game', 'Error making move', { error, gameId })
-      // Revert optimistic update on error
       if (chessRef.current) {
         chessRef.current.undo()
         setFen(chessRef.current.fen())
       }
       toast.error("Error making move! Please try again.")
+      // If move fails, re–start clock for finishingSide
+      if (gameData?.currentTurn) {
+        startClockForActiveSide(gameData.currentTurn)
+      }
       return false
     }
   }
@@ -375,18 +402,18 @@ export default function Game() {
 
       <div className="flex flex-col sm:flex-row gap-4 sm:gap-8 mb-4">
         <div className={`text-2xl font-bold ${gameData?.currentTurn === "w" ? "text-blue-600" : "text-gray-600"}`}>
-          White: {formatTime(whiteTimeDisplay)}
+          White: {formatTime(whiteLocalTime)}
         </div>
         <div className={`text-2xl font-bold ${gameData?.currentTurn === "b" ? "text-blue-600" : "text-gray-600"}`}>
-          Black: {formatTime(blackTimeDisplay)}
+          Black: {formatTime(blackLocalTime)}
         </div>
       </div>
 
       <div className="flex flex-col lg:flex-row gap-4 lg:gap-8 w-full max-w-7xl">
         <div className={`relative flex-1 ${gameData?.status === "finished" ? "opacity-50 pointer-events-none" : ""}`}>
           <div className="w-full max-w-[600px] aspect-square mx-auto">
-            <Chessboard
-              position={fen}
+      <Chessboard
+        position={fen}
               onPieceDrop={handleMove}
               boardOrientation={myColor === "w" ? "white" : "black"}
               boardWidth={Math.min(window.innerWidth * 0.8, 600)}
@@ -536,7 +563,8 @@ export default function Game() {
             <button
               onClick={async () => {
                 try {
-                  const winner = gameData.currentTurn === "w" ? "w" : "b"
+                  // The winner is the player who clicked the button
+                  const winner = user.uid === gameData.whitePlayer ? "w" : "b"
                   const gameRef = doc(db, "games", gameId)
                   await updateDoc(gameRef, {
                     status: "finished",
