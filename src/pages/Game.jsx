@@ -242,6 +242,12 @@ export default function Game() {
         return false
       }
 
+      // Check for checkmate or draw
+      const isCheckmate = chessRef.current.isCheckmate()
+      const isDraw = chessRef.current.isDraw()
+      const gameStatus = isCheckmate ? "finished" : isDraw ? "finished" : "in_progress"
+      const winner = isCheckmate ? gameData.currentTurn : isDraw ? "draw" : null
+
       // Get new position from Chess instance
       const newFen = chessRef.current.fen()
       const newTurn = gameData.currentTurn === "w" ? "b" : "w"
@@ -272,8 +278,53 @@ export default function Game() {
               white: result.color === "w" ? result.san : "",
               black: result.color === "b" ? result.san : "",
               timestamp: now.toISOString()
-            })
+            }),
+            ...(isCheckmate || isDraw ? {
+              status: "finished",
+              winner: winner,
+              endTime: serverTimestamp()
+            } : {})
           })
+
+          // Handle wager distribution if game ended
+          if (isCheckmate || isDraw) {
+            if (winner === "draw") {
+              // Refund wagers for draw
+              const whiteUserRef = doc(db, "users", gameData.whitePlayer)
+              const blackUserRef = doc(db, "users", gameData.blackPlayer)
+              const [whiteSnap, blackSnap] = await Promise.all([
+                getDoc(whiteUserRef),
+                getDoc(blackUserRef)
+              ])
+              
+              if (whiteSnap.exists()) {
+                const whiteData = whiteSnap.data()
+                await updateDoc(whiteUserRef, {
+                  balance: (whiteData.balance || 0) + gameData.wager
+                })
+              }
+              
+              if (blackSnap.exists()) {
+                const blackData = blackSnap.data()
+                await updateDoc(blackUserRef, {
+                  balance: (blackData.balance || 0) + gameData.wager
+                })
+              }
+              toast.success("Game ended in a draw!")
+            } else {
+              // Winner gets double the wager
+              const winnerId = winner === "w" ? gameData.whitePlayer : gameData.blackPlayer
+              const userRef = doc(db, "users", winnerId)
+              const userSnap = await getDoc(userRef)
+              if (userSnap.exists()) {
+                const userData = userSnap.data()
+                await updateDoc(userRef, {
+                  balance: (userData.balance || 0) + gameData.wager * 2
+                })
+              }
+              toast.success(winnerId === user.uid ? "Checkmate! You won!" : "Checkmate! You lost!")
+            }
+          }
           break
         } catch (error) {
           retries--
