@@ -29,3 +29,6 @@ firebase-debug.log
 ui-debug.log
 .runtimeconfig.json
 emulator-data/
+
+# JavaScript backup directory
+js-backup/
