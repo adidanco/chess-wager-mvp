@@ -8,6 +8,8 @@ export default function CreateGame(): JSX.Element {
   const {
     wager,
     setWager,
+    timeOption,
+    setTimeOption,
     isCreating,
     userBalance,
     isLoading,
@@ -24,6 +26,8 @@ export default function CreateGame(): JSX.Element {
       <WagerForm
         wager={wager}
         setWager={setWager}
+        timeOption={timeOption}
+        setTimeOption={setTimeOption}
         userBalance={userBalance}
         isSubmitting={isCreating}
         onSubmit={handleCreateGame}

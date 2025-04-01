@@ -54,6 +54,7 @@ export default function Game(): JSX.Element {
               currentTurn={gameData?.currentTurn}
               playerColor={myColor}
               wager={gameData?.wager || 0}
+              timeControl={gameData?.timeControl}
               error={error}
             />
           </div>

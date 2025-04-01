@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Chess } from "chess.js";
 import { collection, addDoc, serverTimestamp, DocumentReference } from "firebase/firestore";
 import { db } from "../firebase";
-import { DEFAULT_TIMER, GAME_STATUS } from "../utils/constants";
+import { DEFAULT_TIMER, GAME_STATUS, TIMER_OPTIONS, TimeOption } from "../utils/constants";
 import toast from "react-hot-toast";
 import { logger } from "../utils/logger";
 import { useAuth } from "../context/AuthContext";
@@ -15,6 +15,8 @@ import { GameData } from "chessTypes";
 interface CreateGameHook {
   wager: string;
   setWager: (wager: string) => void;
+  timeOption: TimeOption;
+  setTimeOption: (option: TimeOption) => void;
   isCreating: boolean;
   userBalance: number;
   isLoading: boolean;
@@ -27,6 +29,7 @@ interface CreateGameHook {
  */
 const useCreateGame = (): CreateGameHook => {
   const [wager, setWager] = useState<string>("");
+  const [timeOption, setTimeOption] = useState<TimeOption>("FIVE_MIN");
   const [isCreating, setIsCreating] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   
@@ -71,12 +74,16 @@ const useCreateGame = (): CreateGameHook => {
     try {
       logger.info('useCreateGame', 'Creating new game', { 
         userId: currentUser.uid,
-        wager: wagerAmount 
+        wager: wagerAmount,
+        timeControl: timeOption
       });
       
       // Initialize a new chess instance for the initial FEN
       const chess = new Chess();
       const initialFen = chess.fen();
+      
+      // Get time control value in milliseconds
+      const timeControl = TIMER_OPTIONS[timeOption];
       
       // Create the game in Firestore
       const newGame: Partial<GameData> = {
@@ -87,8 +94,9 @@ const useCreateGame = (): CreateGameHook => {
         createdAt: serverTimestamp(),
         fen: initialFen,
         currentTurn: "w",
-        whiteTime: DEFAULT_TIMER,
-        blackTime: DEFAULT_TIMER,
+        whiteTime: timeControl,
+        blackTime: timeControl,
+        timeControl: timeControl,
         moveHistory: []
       };
       
@@ -96,7 +104,8 @@ const useCreateGame = (): CreateGameHook => {
       
       logger.info('useCreateGame', 'Game created successfully', { 
         gameId: gameRef.id,
-        userId: currentUser.uid 
+        userId: currentUser.uid,
+        timeControl: timeOption
       });
       
       // Deduct wager from user's balance
@@ -127,6 +136,8 @@ const useCreateGame = (): CreateGameHook => {
   return {
     wager,
     setWager,
+    timeOption,
+    setTimeOption,
     isCreating,
     userBalance: balance,
     isLoading,

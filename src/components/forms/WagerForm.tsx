@@ -1,5 +1,5 @@
 import React, { FormEvent } from "react";
-import { CURRENCY_SYMBOL } from "../../utils/constants";
+import { CURRENCY_SYMBOL, TIME_DISPLAY_OPTIONS, TimeOption } from "../../utils/constants";
 
 /**
  * Interface for WagerForm props
@@ -14,6 +14,8 @@ interface WagerFormProps {
   submitLabel?: string;
   submittingLabel?: string;
   cancelLabel?: string;
+  timeOption: TimeOption;
+  setTimeOption: (option: TimeOption) => void;
 }
 
 /**
@@ -29,6 +31,8 @@ const WagerForm = ({
   submitLabel = "Create Game",
   submittingLabel = "Creating...",
   cancelLabel = "Cancel",
+  timeOption,
+  setTimeOption,
 }: WagerFormProps): JSX.Element => {
   return (
     <div className="bg-white p-8 rounded-lg shadow-md w-96">
@@ -53,6 +57,28 @@ const WagerForm = ({
             </p>
           )}
         </div>
+        
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Time Control
+          </label>
+          <select
+            value={timeOption}
+            onChange={(e) => setTimeOption(e.target.value as TimeOption)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            required
+          >
+            {TIME_DISPLAY_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-sm text-gray-500">
+            Each player will have this amount of time for the entire game
+          </p>
+        </div>
+        
         <button
           type="submit"
           disabled={isSubmitting}

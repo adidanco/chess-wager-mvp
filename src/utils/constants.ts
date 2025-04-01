@@ -1,12 +1,22 @@
 // Game constants
 export const TIMER_OPTIONS = {
-  FIVE_MIN: 300000, // 5 minutes in milliseconds
-  TEN_MIN: 600000,  // 10 minutes
-  FIFTEEN_MIN: 900000, // 15 minutes
+  THREE_MIN: 180000, // 3 minutes in milliseconds
+  FIVE_MIN: 300000,  // 5 minutes in milliseconds
+  TEN_MIN: 600000,   // 10 minutes in milliseconds
 } as const;
+
+// Define type for timer options
+export type TimeOption = keyof typeof TIMER_OPTIONS;
 
 // Default timer
 export const DEFAULT_TIMER = TIMER_OPTIONS.FIVE_MIN;
+
+// Timer display options for UI
+export const TIME_DISPLAY_OPTIONS = [
+  { value: "THREE_MIN", label: "3 minutes" },
+  { value: "FIVE_MIN", label: "5 minutes" },
+  { value: "TEN_MIN", label: "10 minutes" },
+] as const;
 
 // Clock update frequency (ms)
 export const CLOCK_UPDATE_FREQUENCY = 250; // 4 times per second
