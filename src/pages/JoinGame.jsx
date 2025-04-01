@@ -3,52 +3,29 @@
 import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { collection, query, where, onSnapshot, doc, updateDoc, getDoc, increment, orderBy, serverTimestamp } from "firebase/firestore"
-import { db, auth } from "../firebase"
+import { db } from "../firebase"
 import toast from "react-hot-toast"
 import { logger } from "../utils/logger"
+import { useAuth } from "../context/AuthContext"
+import LoadingSpinner from "../components/common/LoadingSpinner"
+import PageLayout from "../components/common/PageLayout"
 
 export default function JoinGame() {
   const navigate = useNavigate()
   const [availableGames, setAvailableGames] = useState([])
   const [loading, setLoading] = useState(true)
-  const [userBalance, setUserBalance] = useState(null)
+  const { currentUser, balance, updateBalance, isAuthenticated } = useAuth()
 
   useEffect(() => {
-    if (!auth.currentUser) {
+    if (!isAuthenticated) {
       logger.warn('JoinGame', 'User not authenticated, redirecting to login')
       navigate("/login")
       return
     }
 
     logger.info('JoinGame', 'Initializing join game component', { 
-      userId: auth.currentUser.uid 
+      userId: currentUser.uid 
     })
-
-    // Fetch user's balance
-    const userRef = doc(db, "users", auth.currentUser.uid)
-    getDoc(userRef)
-      .then((doc) => {
-        if (doc.exists()) {
-          const data = doc.data()
-          logger.debug('JoinGame', 'User balance fetched', { 
-            userId: auth.currentUser.uid,
-            balance: data.balance 
-          })
-          setUserBalance(data.balance || 0)
-        } else {
-          logger.error('JoinGame', 'User document not found', { 
-            userId: auth.currentUser.uid 
-          })
-          toast.error("User data not found!")
-        }
-      })
-      .catch((error) => {
-        logger.error('JoinGame', 'Error fetching user balance', { 
-          error, 
-          userId: auth.currentUser.uid 
-        })
-        toast.error("Error fetching balance!")
-      })
 
     // Subscribe to available games
     const q = query(
@@ -57,7 +34,7 @@ export default function JoinGame() {
     )
 
     logger.debug('JoinGame', 'Setting up games query', { 
-      userId: auth.currentUser.uid,
+      userId: currentUser.uid,
       query: q
     })
 
@@ -67,12 +44,11 @@ export default function JoinGame() {
         snapshot.forEach((doc) => {
           const gameData = doc.data()
           // Client-side filter to exclude user's own games
-          if (gameData.whitePlayer !== auth.currentUser.uid) {
+          if (gameData.whitePlayer !== currentUser.uid) {
             logger.debug('JoinGame', 'Found game', { 
               gameId: doc.id,
               status: gameData.status,
-              whitePlayer: gameData.whitePlayer,
-              blackPlayer: gameData.blackPlayer
+              whitePlayer: gameData.whitePlayer
             })
             games.push({ id: doc.id, ...gameData })
           }
@@ -87,7 +63,7 @@ export default function JoinGame() {
       (error) => {
         logger.error('JoinGame', 'Error in games snapshot listener', { 
           error, 
-          userId: auth.currentUser.uid 
+          userId: currentUser.uid 
         })
         toast.error("Error fetching available games!")
         setLoading(false)
@@ -96,23 +72,17 @@ export default function JoinGame() {
 
     return () => {
       logger.debug('JoinGame', 'Cleaning up join game component', { 
-        userId: auth.currentUser.uid 
+        userId: currentUser.uid 
       })
       unsubscribe()
     }
-  }, [navigate])
+  }, [navigate, currentUser, isAuthenticated])
 
   const handleJoinGame = async (gameId, wager) => {
-    if (!auth.currentUser) {
-      logger.warn('JoinGame', 'Join game attempted without authentication')
-      navigate("/login")
-      return
-    }
-
-    if (wager > userBalance) {
+    if (wager > balance) {
       logger.warn('JoinGame', 'Insufficient balance', { 
         wager, 
-        userBalance 
+        balance 
       })
       toast.error("Insufficient balance!")
       return
@@ -121,7 +91,7 @@ export default function JoinGame() {
     setLoading(true)
     logger.info('JoinGame', 'Attempting to join game', { 
       gameId, 
-      userId: auth.currentUser.uid,
+      userId: currentUser.uid,
       wager 
     })
 
@@ -132,6 +102,7 @@ export default function JoinGame() {
       if (!gameSnap.exists()) {
         logger.error('JoinGame', 'Game not found', { gameId })
         toast.error("Game not found!")
+        setLoading(false)
         return
       }
 
@@ -142,15 +113,14 @@ export default function JoinGame() {
           status: gameData.status 
         })
         toast.error("Game is no longer available!")
+        setLoading(false)
         return
       }
 
       // Update game document
       await updateDoc(gameRef, {
-        blackPlayer: auth.currentUser.uid,
+        blackPlayer: currentUser.uid,
         status: "in_progress",
-        pot: gameData.pot + wager,
-        // Initialize game state
         whiteTime: 300000,
         blackTime: 300000,
         currentTurn: "w",
@@ -159,18 +129,15 @@ export default function JoinGame() {
 
       logger.debug('JoinGame', 'Game document updated', { 
         gameId, 
-        userId: auth.currentUser.uid 
+        userId: currentUser.uid 
       })
 
-      // Deduct wager from user's balance
-      const userRef = doc(db, "users", auth.currentUser.uid)
-      await updateDoc(userRef, {
-        balance: increment(-wager)
-      })
+      // Deduct wager from user's balance using AuthContext
+      await updateBalance(-wager, "joining game")
 
       logger.info('JoinGame', 'Successfully joined game', { 
         gameId, 
-        userId: auth.currentUser.uid 
+        userId: currentUser.uid 
       })
 
       toast.success("Joined game successfully!")
@@ -179,55 +146,71 @@ export default function JoinGame() {
       logger.error('JoinGame', 'Error joining game', { 
         error, 
         gameId, 
-        userId: auth.currentUser.uid 
+        userId: currentUser.uid 
       })
-      toast.error("Error joining game!")
-    } finally {
+      toast.error("Failed to join game")
       setLoading(false)
     }
   }
 
+  if (loading) {
+    return <LoadingSpinner message="Loading available games..." />
+  }
+
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
-      <div className="bg-white p-8 rounded-lg shadow-md w-96">
-        <h2 className="text-2xl font-bold mb-6 text-center">Available Games</h2>
-        {loading ? (
-          <p className="text-center">Loading available games...</p>
-        ) : availableGames.length === 0 ? (
-          <p className="text-center text-gray-500">No games available</p>
+    <PageLayout title="Join a Game">
+      <div className="max-w-4xl mx-auto p-4">
+        <h1 className="text-2xl font-bold mb-6">Available Games</h1>
+        
+        {availableGames.length === 0 ? (
+          <div className="text-center p-8 bg-white rounded-lg shadow">
+            <p className="text-gray-600 mb-4">No games available to join.</p>
+            <button
+              onClick={() => navigate("/create-game")}
+              className="bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700"
+            >
+              Create a Game
+            </button>
+          </div>
         ) : (
-          <div className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
             {availableGames.map((game) => (
-              <div
-                key={game.id}
-                className="flex justify-between items-center p-4 border rounded-lg hover:bg-gray-50"
+              <div 
+                key={game.id} 
+                className="bg-white p-4 rounded-lg shadow-md border border-gray-200"
               >
-                <div>
-                  <div className="text-lg font-semibold text-green-600">
-                    Wager: ₹{game.wager}
-                  </div>
-                  <p className="text-sm text-gray-500">
-                    Created: {new Date(game.createdAt?.toDate()).toLocaleString()}
-                  </p>
+                <div className="mb-3">
+                  <span className="font-semibold">Wager: </span>
+                  <span className="text-green-600 font-bold">${game.wager}</span>
                 </div>
+                <p className="text-sm text-gray-600 mb-3">
+                  Created: {game.createdAt?.toDate().toLocaleString() || "Just now"}
+                </p>
                 <button
                   onClick={() => handleJoinGame(game.id, game.wager)}
-                  disabled={loading}
-                  className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 disabled:opacity-50"
+                  disabled={game.wager > balance}
+                  className={`w-full py-2 px-4 rounded ${
+                    game.wager > balance
+                      ? "bg-gray-400 cursor-not-allowed"
+                      : "bg-blue-600 hover:bg-blue-700"
+                  } text-white`}
                 >
-                  Join Game
+                  {game.wager > balance ? "Insufficient Balance" : "Join Game"}
                 </button>
               </div>
             ))}
           </div>
         )}
-        <button
-          onClick={() => navigate("/")}
-          className="w-full mt-4 bg-gray-500 text-white py-2 px-4 rounded-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
-        >
-          Back to Home
-        </button>
+        
+        <div className="mt-6 text-center">
+          <button
+            onClick={() => navigate("/")}
+            className="bg-gray-500 text-white py-2 px-4 rounded hover:bg-gray-600"
+          >
+            Back to Home
+          </button>
+        </div>
       </div>
-    </div>
+    </PageLayout>
   )
 }
