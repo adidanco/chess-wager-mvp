@@ -15,6 +15,7 @@ import Game from "./pages/Game"
 import CreateGame from "./pages/CreateGame"
 import JoinGame from "./pages/JoinGame"
 import AvailableGames from "./pages/AvailableGames"
+import TestConstants from "./test-constants"
 
 // Wrap Firestore operations with network check
 const withNetworkCheck = async <T,>(operation: () => Promise<T>): Promise<T> => {
@@ -44,6 +45,7 @@ function App(): JSX.Element {
                 <Route path="/create-game" element={<CreateGame />} />
                 <Route path="/join-game" element={<JoinGame />} />
                 <Route path="/available-games" element={<AvailableGames />} />
+                <Route path="/test-constants" element={<TestConstants />} />
               </Routes>
             </div>
           </BrowserRouter>

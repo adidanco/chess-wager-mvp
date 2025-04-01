@@ -1,5 +1,5 @@
-import React, { FormEvent } from "react";
-import { CURRENCY_SYMBOL, TIME_DISPLAY_OPTIONS, TimeOption } from "../../utils/constants";
+import React, { FormEvent, useEffect } from "react";
+import { CURRENCY_SYMBOL, TIME_DISPLAY_OPTIONS, TIMER_OPTIONS, TimeOption } from "../../utils/constants";
 
 /**
  * Interface for WagerForm props
@@ -34,9 +34,26 @@ const WagerForm = ({
   timeOption,
   setTimeOption,
 }: WagerFormProps): JSX.Element => {
+  
+  // Debug logging
+  useEffect(() => {
+    console.log('WagerForm Render - Props:', {
+      timeOption,
+      setTimeOption: typeof setTimeOption,
+      timeDisplayOptions: TIME_DISPLAY_OPTIONS
+    });
+  }, [timeOption]);
+  
   return (
     <div className="bg-white p-8 rounded-lg shadow-md w-96">
       <h2 className="text-2xl font-bold mb-6 text-center">Create New Game</h2>
+      
+      {/* Debug display */}
+      <div className="mb-4 p-2 bg-yellow-100 rounded">
+        <p className="text-xs font-mono">Debug: TimeOption = {timeOption}</p>
+        <p className="text-xs font-mono">TIME_DISPLAY_OPTIONS = {JSON.stringify(TIME_DISPLAY_OPTIONS)}</p>
+      </div>
+      
       <form onSubmit={onSubmit} className="space-y-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -62,18 +79,49 @@ const WagerForm = ({
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Time Control
           </label>
-          <select
-            value={timeOption}
-            onChange={(e) => setTimeOption(e.target.value as TimeOption)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            required
-          >
-            {TIME_DISPLAY_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+          
+          {/* Replace dropdown with radio buttons */}
+          <div className="space-y-2">
+            <div className="flex items-center">
+              <input
+                type="radio"
+                id="time-3min"
+                name="timeControl"
+                value="THREE_MIN"
+                checked={timeOption === "THREE_MIN"}
+                onChange={() => setTimeOption("THREE_MIN")}
+                className="mr-2"
+              />
+              <label htmlFor="time-3min">3 minutes</label>
+            </div>
+            
+            <div className="flex items-center">
+              <input
+                type="radio"
+                id="time-5min"
+                name="timeControl"
+                value="FIVE_MIN"
+                checked={timeOption === "FIVE_MIN"}
+                onChange={() => setTimeOption("FIVE_MIN")}
+                className="mr-2"
+              />
+              <label htmlFor="time-5min">5 minutes</label>
+            </div>
+            
+            <div className="flex items-center">
+              <input
+                type="radio"
+                id="time-10min"
+                name="timeControl"
+                value="TEN_MIN"
+                checked={timeOption === "TEN_MIN"}
+                onChange={() => setTimeOption("TEN_MIN")}
+                className="mr-2"
+              />
+              <label htmlFor="time-10min">10 minutes</label>
+            </div>
+          </div>
+          
           <p className="mt-1 text-sm text-gray-500">
             Each player will have this amount of time for the entire game
           </p>
