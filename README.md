@@ -1,12 +1,57 @@
-# React + Vite
+# Chess Wager MVP - JavaScript Version
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This is the stable JavaScript branch of the Chess Wager MVP project. This branch maintains the original JavaScript implementation of the project.
 
-Currently, two official plugins are available:
+## Branch Information
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **Current Branch**: `stable-javascript` (JavaScript-only version)
+- **TypeScript Version**: Available in the `stable-typescript` branch
 
-## Expanding the ESLint configuration
+## Project Overview
 
-If you are developing a production application, we recommend using TypeScript and enable type-aware lint rules. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Chess Wager is a platform where users can play chess with wagers. Key features include:
+- User authentication
+- Balance management and wagers
+- Real-time chess gameplay
+- Time controls
+
+## Development Setup
+
+1. **Install dependencies**:
+   ```
+   npm install
+   ```
+
+2. **Run development server**:
+   ```
+   npm run dev
+   ```
+
+3. **Build for production**:
+   ```
+   npm run build
+   ```
+
+## Branch Organization
+
+- `stable-javascript` (this branch): Stable JavaScript version
+- `stable-typescript`: Stable TypeScript version with enhanced type safety
+- `main`: Default branch (TypeScript version)
+
+## Switching to TypeScript
+
+If you want to work with the TypeScript version of this project, checkout the `stable-typescript` branch:
+```
+git checkout stable-typescript
+```
+
+## Deployment
+
+The application is deployed to Firebase Hosting. The TypeScript version (`stable-typescript` branch) is used for production deployments.
+
+## Contributing
+
+When contributing to this project, please consider the following:
+
+1. For JavaScript-specific fixes, make pull requests to this branch
+2. For new features or enhancements, prefer the TypeScript branch
