@@ -44,11 +44,31 @@ export default function Game(): JSX.Element {
 
   return (
     <PageLayout>
-      <div className="container mx-auto px-4 flex flex-col md:flex-row gap-6">
-        {/* Main game area */}
-        <div className="md:flex-1">
-          {/* Game info section */}
-          <div className="bg-white rounded-lg shadow-md p-4 mb-4">
+      <div className="container mx-auto px-4 py-6 pb-safe">
+        {/* Game title and status */}
+        <div className="mb-4 sm:mb-6 text-center">
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-800 mb-2">Chess Match</h1>
+          {isGameOver && (
+            <div className={`inline-block py-1 sm:py-2 px-3 sm:px-4 rounded-full text-white font-medium text-sm sm:text-base ${
+              isGameOver.winner === myColor 
+                ? 'bg-green-500' 
+                : isGameOver.winner === 'draw' 
+                  ? 'bg-yellow-500' 
+                  : 'bg-red-500'
+            }`}>
+              {isGameOver.winner === myColor 
+                ? 'You Won!' 
+                : isGameOver.winner === 'draw' 
+                  ? 'Game Drawn' 
+                  : 'You Lost'}
+            </div>
+          )}
+        </div>
+        
+        <div className="flex flex-col lg:flex-row gap-4 sm:gap-6">
+          {/* Main game area */}
+          <div className="lg:flex-1 space-y-4 sm:space-y-6">
+            {/* Game info section */}
             <GameInfo
               gameId={gameId}
               currentTurn={gameData?.currentTurn}
@@ -57,34 +77,33 @@ export default function Game(): JSX.Element {
               timeControl={gameData?.timeControl}
               error={error}
             />
-          </div>
 
-          {/* Chessboard */}
-          <div className="mb-4">
-            <ChessboardComponent
-              fen={fen}
-              onPieceDrop={handlePieceDrop}
-              orientation={myColor === "w" ? "white" : "black"}
-              isGameOver={isGameOver}
-            />
-          </div>
-
-          {/* Clock display */}
-          <div className="bg-white rounded-lg shadow-md p-4 mb-4">
+            {/* Clock display */}
             <ClockDisplay
               whiteTime={whiteTime}
               blackTime={blackTime}
               currentTurn={gameData?.currentTurn}
             />
-          </div>
-        </div>
 
-        {/* Side panel */}
-        <div className="md:w-96 bg-white rounded-lg shadow-md p-4">
-          <h3 className="text-lg font-bold mb-4">Move History</h3>
-          <MoveHistory moves={moveHistory} />
-          
-          <div className="mt-6">
+            {/* Chessboard - Using max-width to ensure it fits on mobile */}
+            <div className="bg-white p-2 sm:p-4 rounded-xl shadow-md">
+              <div className="w-full mx-auto" style={{ maxWidth: 'min(calc(100vw - 32px), 560px)' }}>
+                <ChessboardComponent
+                  fen={fen}
+                  onPieceDrop={handlePieceDrop}
+                  orientation={myColor === "w" ? "white" : "black"}
+                  isGameOver={isGameOver}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Side panel - Full width on mobile, fixed width on desktop */}
+          <div className="w-full lg:w-96 space-y-4 sm:space-y-6">
+            {/* Move History */}
+            <MoveHistory moves={moveHistory} />
+            
+            {/* Game Actions */}
             <GameActionButtons
               gameData={gameData}
               gameId={gameId}

@@ -6,6 +6,7 @@ import React from "react";
 interface GameActionsProps {
   onCreateGame: () => void;
   onJoinGame: () => void;
+  onSettings: () => void;
   onLogout: () => void;
 }
 
@@ -14,7 +15,8 @@ interface GameActionsProps {
  */
 const GameActions = ({ 
   onCreateGame, 
-  onJoinGame, 
+  onJoinGame,
+  onSettings,
   onLogout 
 }: GameActionsProps): JSX.Element => {
   return (
@@ -30,6 +32,12 @@ const GameActions = ({
         className="w-full bg-green-500 text-white py-3 px-4 rounded-md text-lg font-medium hover:bg-green-600 transition-colors shadow-md"
       >
         Join Game
+      </button>
+      <button
+        onClick={onSettings}
+        className="w-full bg-purple-500 text-white py-3 px-4 rounded-md text-lg font-medium hover:bg-purple-600 transition-colors shadow-md"
+      >
+        Settings
       </button>
       <button
         onClick={onLogout}

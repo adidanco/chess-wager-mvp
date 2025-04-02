@@ -213,6 +213,9 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
     }
   }
 
+  // Get emailVerified status from both Firebase Auth and Firestore
+  const emailVerified = currentUser?.emailVerified || (userProfile?.emailVerified === true)
+
   const value: AuthContextType = {
     currentUser,
     userProfile,
@@ -227,7 +230,9 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
     balance: userProfile?.balance || 0,
     username: userProfile?.username || 'User',
     // Stats (if available in user profile)
-    stats: userProfile?.stats || { wins: 0, losses: 0, draws: 0 }
+    stats: userProfile?.stats || { wins: 0, losses: 0, draws: 0, eloRating: 1200 },
+    // Email verification status - easier for UI to check
+    emailVerified: emailVerified || false
   }
 
   return (

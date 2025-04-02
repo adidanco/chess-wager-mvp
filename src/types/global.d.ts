@@ -20,7 +20,7 @@ declare module 'chessTypes' {
     blackPlayer?: string | null;
     currentTurn?: 'w' | 'b';
     fen?: string;
-    status?: string;
+    status?: import('../utils/constants').GameStatus;
     wager?: number;
     timeControl?: number;
     player1Id?: string; // Game creator ID
@@ -49,6 +49,7 @@ declare module 'chessTypes' {
     balance?: number;
     photoURL?: string;
     stats?: UserStats;
+    eloRating?: number;
     wins?: number;
     losses?: number;
     draws?: number;
@@ -59,6 +60,9 @@ declare module 'chessTypes' {
       reason: string;
       timestamp: any;
     }>;
+    emailVerified?: boolean;
+    otpVerified?: boolean;
+    lastOtpSent?: any;
   }
 
   // Stats related types
@@ -66,6 +70,12 @@ declare module 'chessTypes' {
     wins: number;
     losses: number;
     draws: number;
+    eloRating: number;
+    // Glicko-2 rating components
+    ratingDeviation?: number;     // RD - uncertainty in the rating
+    volatility?: number;          // Vol - consistency of the player
+    lastPlayedTimestamp?: number; // When the player last played a rated game
+    eloHistory?: Record<string, number>; // Timestamp to rating mapping
   }
 
   // Auth context related types
@@ -88,5 +98,6 @@ declare module 'chessTypes' {
     logout: () => Promise<void>;
     updateBalance: (amount: number, reason: string) => Promise<boolean>;
     balanceUpdating: boolean;
+    emailVerified: boolean;
   }
 } 

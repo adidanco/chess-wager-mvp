@@ -1,8 +1,10 @@
-import React, { useEffect } from "react"
+import React, { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { toast } from "react-hot-toast"
 import { logger } from "../utils/logger"
-import UserStats from "../components/home/UserStats"
+import { sendEmailVerification, User } from "firebase/auth"
+import { auth, db } from "../firebase"
+import { doc, updateDoc } from "firebase/firestore"
 import BalanceDisplay from "../components/home/BalanceDisplay"
 import GameActions from "../components/home/GameActions"
 import LoadingSpinner from "../components/common/LoadingSpinner"
@@ -17,10 +19,18 @@ export default function Home(): JSX.Element {
     loading, 
     profileLoading, 
     isAuthenticated, 
-    balance, 
-    stats,
-    logout
+    balance,
+    logout,
+    emailVerified
   } = useAuth()
+  
+  const [verificationSending, setVerificationSending] = useState<boolean>(false)
+  const [showVerificationInput, setShowVerificationInput] = useState<boolean>(false)
+  const [verificationCode, setVerificationCode] = useState<string>("")
+  const [verifying, setVerifying] = useState<boolean>(false)
+
+  // For demo purposes - any 4 digit code will work
+  const DEMO_CODE = "1234"
 
   useEffect(() => {
     if (!isAuthenticated && !loading) {
@@ -28,6 +38,70 @@ export default function Home(): JSX.Element {
       navigate("/login")
     }
   }, [isAuthenticated, loading, navigate])
+
+  // Handle resending verification email
+  const handleResendVerification = async (): Promise<void> => {
+    if (!currentUser) return
+    
+    setVerificationSending(true)
+    try {
+      await sendEmailVerification(currentUser as User)
+      toast.success(`Verification email sent! For demo, use code: ${DEMO_CODE}`)
+      logger.info('Home', 'Verification email sent', { email: currentUser.email })
+      setShowVerificationInput(true)
+    } catch (error) {
+      const err = error as Error
+      logger.error('Home', 'Failed to send verification email', { error: err })
+      toast.error("Failed to send verification email. Please try again later.")
+    } finally {
+      setVerificationSending(false)
+    }
+  }
+
+  // Handle verification code submission
+  const handleVerifyEmail = async (): Promise<void> => {
+    if (!currentUser || !verificationCode) return
+    
+    if (verificationCode.length !== 4) {
+      toast.error("Please enter a 4-digit verification code")
+      return
+    }
+    
+    setVerifying(true)
+    try {
+      // For demo purposes, we'll accept any 4-digit code
+      // In a real app, this would validate against a code sent to the user's email
+      
+      // Update user document to mark email as verified
+      if (currentUser.uid) {
+        await updateDoc(doc(db, "users", currentUser.uid), {
+          emailVerified: true,
+          updatedAt: new Date()
+        })
+        
+        logger.info('Home', 'Email verified in Firestore', { userId: currentUser.uid })
+      }
+      
+      // Force refresh the user to get updated emailVerified status
+      await (currentUser as User).reload()
+      
+      toast.success("Email verified successfully!")
+      logger.info('Home', 'Email verified', { userId: currentUser.uid })
+      
+      // Reset UI state
+      setShowVerificationInput(false)
+      setVerificationCode("")
+      
+      // Refresh the page to update the context with the new emailVerified status
+      window.location.reload()
+    } catch (error) {
+      const err = error as Error
+      logger.error('Home', 'Email verification failed', { error: err })
+      toast.error("Failed to verify email. Please try again.")
+    } finally {
+      setVerifying(false)
+    }
+  }
 
   // Handlers for GameActions component
   const handleCreateGame = (): void => {
@@ -45,6 +119,14 @@ export default function Home(): JSX.Element {
       const err = error as Error;
       logger.error('Home', 'Logout failed', { error: err });
     }
+  };
+
+  const handleProfile = (): void => {
+    navigate("/profile");
+  };
+  
+  const handleSettings = (): void => {
+    navigate("/settings");
   };
 
   // Show loading spinner if auth or profile is loading
@@ -78,9 +160,98 @@ export default function Home(): JSX.Element {
   return (
     <PageLayout>
       <div className="container mx-auto px-4 max-w-md">
+        {/* Email verification banner */}
+        {!emailVerified && (
+          <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6 rounded-md">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3 flex-grow">
+                <p className="text-sm text-yellow-700">
+                  Your email is not verified. Verify your email to get full access to all features.
+                </p>
+                
+                {showVerificationInput ? (
+                  <div className="mt-3">
+                    <label className="block text-sm font-medium text-yellow-700 mb-1">
+                      Enter verification code
+                    </label>
+                    <div className="flex">
+                      <input
+                        type="text"
+                        value={verificationCode}
+                        onChange={(e) => setVerificationCode(e.target.value.replace(/[^0-9]/g, "").slice(0, 4))}
+                        placeholder="4-digit code"
+                        className="w-full border border-yellow-300 bg-white rounded-l-md py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                        maxLength={4}
+                        inputMode="numeric"
+                      />
+                      <button
+                        onClick={handleVerifyEmail}
+                        disabled={verifying || verificationCode.length !== 4}
+                        className="bg-yellow-400 text-white rounded-r-md py-2 px-4 text-sm font-medium hover:bg-yellow-500 focus:outline-none focus:ring-2 focus:ring-yellow-500 disabled:opacity-50"
+                      >
+                        {verifying ? "Verifying..." : "Verify"}
+                      </button>
+                    </div>
+                    <p className="text-xs text-yellow-600 mt-1">
+                      For demo purposes, any 4-digit code will work
+                    </p>
+                    <div className="flex justify-between mt-2">
+                      <button
+                        onClick={() => setShowVerificationInput(false)}
+                        className="text-xs text-yellow-700 hover:text-yellow-900"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleResendVerification}
+                        disabled={verificationSending}
+                        className="text-xs text-yellow-700 hover:text-yellow-900"
+                      >
+                        Resend code
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-2">
+                    <button
+                      onClick={handleResendVerification}
+                      disabled={verificationSending}
+                      className="text-sm font-medium text-yellow-700 hover:text-yellow-600 border border-yellow-400 px-3 py-1 rounded-md hover:bg-yellow-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 disabled:opacity-50"
+                    >
+                      {verificationSending ? "Sending..." : "Resend Verification Email"}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+        
         {/* User welcome card */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-xl font-bold mb-4">Welcome, {userProfile.username}!</h2>
+          <div 
+            className="flex items-center justify-between cursor-pointer hover:bg-gray-50 p-2 rounded-md transition-colors"
+            onClick={handleProfile}
+          >
+            <div>
+              <h2 className="text-xl font-bold">Welcome, {userProfile.username}!</h2>
+              <p className="text-sm text-gray-500">Tap to view profile</p>
+            </div>
+            <div className="flex items-center justify-center w-12 h-12 bg-gray-200 rounded-full overflow-hidden">
+              {userProfile.photoURL ? (
+                <img src={userProfile.photoURL} alt="Profile" className="w-12 h-12 object-cover" />
+              ) : (
+                <span className="text-lg font-bold text-gray-600">
+                  {userProfile.username?.charAt(0).toUpperCase() || "U"}
+                </span>
+              )}
+            </div>
+          </div>
         </div>
         
         {/* Balance display */}
@@ -88,16 +259,12 @@ export default function Home(): JSX.Element {
           <BalanceDisplay balance={balance} />
         </div>
         
-        {/* User stats */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <UserStats stats={stats} />
-        </div>
-        
         {/* Game action buttons */}
         <div className="mb-6">
           <GameActions 
             onCreateGame={handleCreateGame} 
             onJoinGame={handleJoinGame}
+            onSettings={handleSettings}
             onLogout={handleLogout}
           />
         </div>

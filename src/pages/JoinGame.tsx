@@ -20,7 +20,7 @@ import { useAuth } from "../context/AuthContext"
 import LoadingSpinner from "../components/common/LoadingSpinner"
 import PageLayout from "../components/common/PageLayout"
 import { GameData } from "chessTypes"
-import { GAME_STATUS } from "../utils/constants"
+import { GAME_STATUS, CURRENCY_SYMBOL } from "../utils/constants"
 
 // Interface for game items in the available games list
 interface GameItem extends GameData {
@@ -148,8 +148,8 @@ export default function JoinGame(): JSX.Element {
       await updateDoc(gameRef, {
         blackPlayer: currentUser.uid,
         status: GAME_STATUS.IN_PROGRESS,
-        whiteTime: 300000,
-        blackTime: 300000,
+        whiteTime: gameData.timeControl,
+        blackTime: gameData.timeControl,
         currentTurn: "w",
         lastMoveTime: serverTimestamp()
       })
@@ -209,7 +209,7 @@ export default function JoinGame(): JSX.Element {
               >
                 <div className="mb-3">
                   <span className="font-semibold">Wager: </span>
-                  <span className="text-green-600 font-bold">${game.wager}</span>
+                  <span className="text-green-600 font-bold">{CURRENCY_SYMBOL}{game.wager}</span>
                 </div>
                 <p className="text-sm text-gray-600 mb-3">
                   Created: {game.createdAt?.toDate().toLocaleString() || "Just now"}

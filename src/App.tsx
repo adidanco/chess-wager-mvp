@@ -15,6 +15,9 @@ import Game from "./pages/Game"
 import CreateGame from "./pages/CreateGame"
 import JoinGame from "./pages/JoinGame"
 import AvailableGames from "./pages/AvailableGames"
+import Profile from "./pages/Profile"
+import Settings from "./pages/Settings"
+import ForgotPassword from "./pages/ForgotPassword"
 import TestConstants from "./test-constants"
 
 // Wrap Firestore operations with network check
@@ -41,10 +44,13 @@ function App(): JSX.Element {
                 <Route path="/" element={<Home />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/signup" element={<SignUp />} />
+                <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/game/:gameId" element={<Game />} />
                 <Route path="/create-game" element={<CreateGame />} />
                 <Route path="/join-game" element={<JoinGame />} />
                 <Route path="/available-games" element={<AvailableGames />} />
+                <Route path="/profile" element={<Profile />} />
+                <Route path="/settings" element={<Settings />} />
                 <Route path="/test-constants" element={<TestConstants />} />
               </Routes>
             </div>

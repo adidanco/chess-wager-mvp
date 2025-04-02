@@ -2,11 +2,39 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Chess Wager MVP</title>
     <!-- Tailwind CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <style>
+      /* iOS-specific styles for notch compatibility */
+      .pb-safe {
+        padding-bottom: env(safe-area-inset-bottom, 20px);
+      }
+      .pt-safe {
+        padding-top: env(safe-area-inset-top, 20px);
+      }
+      
+      /* Improve touch actions */
+      button, input, a {
+        touch-action: manipulation;
+      }
+      
+      /* Fix iOS Safari 100vh issue */
+      html, body, #root {
+        height: 100%;
+        width: 100%;
+        overscroll-behavior-y: none;
+      }
+      
+      /* Fix button press highlight on mobile */
+      button {
+        -webkit-tap-highlight-color: transparent;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>

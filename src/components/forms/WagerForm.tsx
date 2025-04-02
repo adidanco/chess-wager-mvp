@@ -1,4 +1,4 @@
-import React, { FormEvent, useEffect } from "react";
+import React, { FormEvent, useEffect, useState } from "react";
 import { CURRENCY_SYMBOL, TIME_DISPLAY_OPTIONS, TIMER_OPTIONS, TimeOption } from "../../utils/constants";
 
 /**
@@ -34,120 +34,164 @@ const WagerForm = ({
   timeOption,
   setTimeOption,
 }: WagerFormProps): JSX.Element => {
+  const [sliderValue, setSliderValue] = useState<number>(parseInt(wager) || 10);
   
-  // Debug logging
+  // Quick amount buttons
+  const quickAmounts = [10, 50, 100, 500];
+  
+  // Handle slider change
+  const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = parseInt(e.target.value);
+    setSliderValue(value);
+    setWager(value.toString());
+  };
+  
+  // Handle quick amount selection
+  const handleQuickAmount = (amount: number) => {
+    setSliderValue(amount);
+    setWager(amount.toString());
+  };
+  
+  // Update slider when wager changes externally
   useEffect(() => {
-    console.log('WagerForm Render - Props:', {
-      timeOption,
-      setTimeOption: typeof setTimeOption,
-      timeDisplayOptions: TIME_DISPLAY_OPTIONS
-    });
-  }, [timeOption]);
+    const parsed = parseInt(wager);
+    if (!isNaN(parsed)) {
+      setSliderValue(parsed);
+    }
+  }, [wager]);
   
   return (
-    <div className="bg-white p-8 rounded-lg shadow-md w-96">
-      <h2 className="text-2xl font-bold mb-6 text-center">Create New Game</h2>
+    <div className="bg-white p-4 sm:p-8 rounded-lg shadow-md w-full max-w-md">
+      <h2 className="text-2xl sm:text-3xl font-bold mb-6 sm:mb-8 text-center text-gray-800">Create New Game</h2>
       
-      {/* Debug display */}
-      <div className="mb-4 p-2 bg-yellow-100 rounded">
-        <p className="text-xs font-mono">Debug: TimeOption = {timeOption}</p>
-        <p className="text-xs font-mono">TIME_DISPLAY_OPTIONS = {JSON.stringify(TIME_DISPLAY_OPTIONS)}</p>
-      </div>
-      
-      <form onSubmit={onSubmit} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Wager Amount ({CURRENCY_SYMBOL})
+      <form onSubmit={onSubmit} className="space-y-6 sm:space-y-8">
+        {/* Wager Amount Section */}
+        <div className="space-y-3 sm:space-y-4">
+          <label className="block text-base sm:text-lg font-semibold text-gray-700 mb-2">
+            Wager Amount
           </label>
-          <input
-            type="number"
-            value={wager}
-            onChange={(e) => setWager(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Enter wager amount"
-            min="1"
-            required
-          />
+          
+          {/* Display current wager with currency */}
+          <div className="flex items-center justify-center mb-3 sm:mb-4">
+            <span className="text-2xl sm:text-3xl font-bold text-green-600">{CURRENCY_SYMBOL}{sliderValue}</span>
+          </div>
+          
+          {/* Quick amount buttons */}
+          <div className="grid grid-cols-4 gap-1 sm:gap-2 mb-3 sm:mb-4">
+            {quickAmounts.map(amount => (
+              <button
+                key={amount}
+                type="button"
+                onClick={() => handleQuickAmount(amount)}
+                className={`py-2 px-1 sm:px-3 min-h-[44px] rounded-md text-sm font-medium transition-colors touch-manipulation ${
+                  sliderValue === amount 
+                    ? 'bg-blue-600 text-white' 
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                {CURRENCY_SYMBOL}{amount}
+              </button>
+            ))}
+          </div>
+          
+          {/* Slider for wager amount */}
+          <div className="space-y-2">
+            <input
+              type="range"
+              min="1"
+              max={Math.max(userBalance, 1000)}
+              value={sliderValue}
+              onChange={handleSliderChange}
+              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+              style={{ touchAction: 'manipulation' }}
+            />
+            
+            {/* Min/Max labels */}
+            <div className="flex justify-between text-xs text-gray-500">
+              <span>{CURRENCY_SYMBOL}1</span>
+              <span>{CURRENCY_SYMBOL}{Math.max(userBalance, 1000)}</span>
+            </div>
+            
+            {/* Manual input */}
+            <div className="mt-3 sm:mt-4">
+              <input
+                type="number"
+                value={wager}
+                onChange={(e) => setWager(e.target.value)}
+                className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-center font-medium"
+                placeholder="Enter wager amount"
+                min="1"
+                required
+              />
+            </div>
+          </div>
+          
           {userBalance !== null && (
-            <p className="mt-1 text-sm text-gray-500">
-              Your balance: {CURRENCY_SYMBOL}{userBalance.toFixed(2)}
+            <p className="mt-2 text-sm text-gray-500 flex items-center justify-center">
+              <span className="mr-1">💰</span> Your balance: {CURRENCY_SYMBOL}{userBalance.toFixed(2)}
             </p>
           )}
         </div>
         
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+        {/* Time Control Section */}
+        <div className="space-y-3 sm:space-y-4">
+          <label className="block text-base sm:text-lg font-semibold text-gray-700 mb-2">
             Time Control
           </label>
           
-          {/* Replace dropdown with radio buttons */}
-          <div className="space-y-2">
-            <div className="flex items-center">
-              <input
-                type="radio"
-                id="time-3min"
-                name="timeControl"
-                value="THREE_MIN"
-                checked={timeOption === "THREE_MIN"}
-                onChange={() => setTimeOption("THREE_MIN")}
-                className="mr-2"
-              />
-              <label htmlFor="time-3min">3 minutes</label>
-            </div>
-            
-            <div className="flex items-center">
-              <input
-                type="radio"
-                id="time-5min"
-                name="timeControl"
-                value="FIVE_MIN"
-                checked={timeOption === "FIVE_MIN"}
-                onChange={() => setTimeOption("FIVE_MIN")}
-                className="mr-2"
-              />
-              <label htmlFor="time-5min">5 minutes</label>
-            </div>
-            
-            <div className="flex items-center">
-              <input
-                type="radio"
-                id="time-10min"
-                name="timeControl"
-                value="TEN_MIN"
-                checked={timeOption === "TEN_MIN"}
-                onChange={() => setTimeOption("TEN_MIN")}
-                className="mr-2"
-              />
-              <label htmlFor="time-10min">10 minutes</label>
-            </div>
+          {/* Time option cards */}
+          <div className="grid grid-cols-3 gap-2 sm:gap-4">
+            {[
+              { value: "THREE_MIN", label: "3", icon: "⚡" },
+              { value: "FIVE_MIN", label: "5", icon: "⏱️" },
+              { value: "TEN_MIN", label: "10", icon: "🕙" }
+            ].map(option => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setTimeOption(option.value as TimeOption)}
+                className={`flex flex-col items-center justify-center py-3 px-2 sm:p-4 rounded-lg border-2 transition-all min-h-[70px] touch-manipulation ${
+                  timeOption === option.value
+                    ? 'border-blue-600 bg-blue-50 shadow-md transform scale-105'
+                    : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'
+                }`}
+              >
+                <span className="text-xl sm:text-2xl mb-1">{option.icon}</span>
+                <span className="text-lg sm:text-xl font-bold">{option.label}</span>
+                <span className="text-xs text-gray-500">minutes</span>
+              </button>
+            ))}
           </div>
           
-          <p className="mt-1 text-sm text-gray-500">
+          <p className="mt-2 text-xs sm:text-sm text-gray-500 text-center">
             Each player will have this amount of time for the entire game
           </p>
         </div>
         
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className={`w-full py-2 px-4 rounded-md text-white font-medium ${
-            isSubmitting
-              ? "bg-gray-400 cursor-not-allowed"
-              : "bg-blue-600 hover:bg-blue-700"
-          }`}
-        >
-          {isSubmitting ? submittingLabel : submitLabel}
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="w-full bg-gray-500 text-white py-2 px-4 rounded-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
-        >
-          {cancelLabel}
-        </button>
+        {/* Action Buttons */}
+        <div className="space-y-3 pt-2 sm:pt-4">
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className={`w-full py-3 px-4 rounded-md text-white font-medium text-base sm:text-lg transition-colors min-h-[44px] ${
+              isSubmitting
+                ? "bg-gray-400 cursor-not-allowed"
+                : "bg-blue-600 hover:bg-blue-700 shadow-md"
+            }`}
+          >
+            {isSubmitting ? submittingLabel : submitLabel}
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="w-full bg-gray-100 text-gray-700 py-3 px-4 rounded-md hover:bg-gray-200 font-medium focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors min-h-[44px]"
+          >
+            {cancelLabel}
+          </button>
+        </div>
       </form>
     </div>
   );
 };
 
-export default WagerForm; 
+export default WagerForm;

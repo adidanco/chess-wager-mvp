@@ -19,6 +19,7 @@ import { logger } from "../utils/logger";
 import useChessClock from "./useChessClock";
 import { NavigateFunction } from "react-router-dom";
 import { GameData } from "chessTypes";
+import { updateRatingsAfterGame } from "../services/ratingService";
 
 // Type for move function result from chess.js
 interface ChessMoveResult {
@@ -100,6 +101,13 @@ const useChessGame = (
     gameDataRef.current = gameData;
   }, [gameData]);
 
+  // Set initial timer values when game data loads
+  useEffect(() => {
+    if (gameData?.timeControl) {
+      setTimes(gameData.whiteTime || gameData.timeControl, gameData.blackTime || gameData.timeControl);
+    }
+  }, [gameData, setTimes]);
+
   // Initialize Chess instance
   useEffect(() => {
     if (!chessRef.current) {
@@ -154,13 +162,36 @@ const useChessGame = (
              try {
                  // Use increment for balance updates
                  await updateDoc(winnerRef, { balance: increment(wager * 2) });
-                 // TODO: Increment win count later
                  logger.info('useChessGame', 'Payout successful on time up', { winnerId, amount: wager * 2 });
              } catch (err) {
                  logger.error('useChessGame', 'Error updating winner balance on time up', { err, winnerId });
              }
              
-            // TODO: Update loser stats later
+            // Update player ratings
+            try {
+              // Winner is white? Then it's a 'win' from white's perspective, otherwise a 'loss'
+              const resultFromWhitePerspective = 
+                winner === PLAYER_COLORS.WHITE ? 'win' : 'loss';
+                
+              await updateRatingsAfterGame(
+                gameId,
+                currentData.whitePlayer,
+                currentData.blackPlayer,
+                resultFromWhitePerspective
+              );
+              logger.info('useChessGame', 'Ratings updated for time loss', { 
+                gameId,
+                winner,
+                loser: loserSide
+              });
+            } catch (error) {
+              logger.error('useChessGame', 'Failed to update ratings for time loss', { 
+                error,
+                gameId,
+                winner,
+                loser: loserSide
+              });
+            }
          } else {
              logger.error('useChessGame', 'Missing player ID or zero wager for payout on time up', { winnerId, loserId, wager });
          }
@@ -175,7 +206,7 @@ const useChessGame = (
       toast.error("Error updating game status!");
     }
     // Removed setGameData from dependencies - relies on gameDataRef
-  }, [gameId, userId, stopClock]); 
+  }, [gameId, userId, stopClock]);
 
   // Stable startClock function
    const startClock = useCallback((side: PlayerColor): void => {
@@ -297,6 +328,21 @@ const useChessGame = (
                      await updateDoc(whiteUserRef, { balance: increment(wager) });
                      await updateDoc(blackUserRef, { balance: increment(wager) });
                      toast.success("Game ended in a draw!");
+                     
+                     // Update ratings for a draw
+                     if (currentData.whitePlayer && currentData.blackPlayer) {
+                       try {
+                         await updateRatingsAfterGame(
+                           gameId,
+                           currentData.whitePlayer,
+                           currentData.blackPlayer,
+                           'draw'
+                         );
+                         logger.info('useChessGame', 'Ratings updated for draw', { gameId });
+                       } catch (error) {
+                         logger.error('useChessGame', 'Failed to update ratings for draw', { error, gameId });
+                       }
+                     }
                  }
             } else if (isCheckmate && currentData.currentTurn) { 
               // Checkmate - winner is the current player
@@ -318,6 +364,32 @@ const useChessGame = (
                      toast.success(currentData.currentTurn === userPlayerColor 
                         ? "Checkmate! You won!" 
                         : "Checkmate! You lost!");
+                     
+                     // Update ratings for a win/loss
+                     if (currentData.whitePlayer && currentData.blackPlayer) {
+                       try {
+                         // If white won, it's a 'win' from white's perspective
+                         // If black won, it's a 'loss' from white's perspective
+                         const resultFromWhitePerspective = 
+                           currentData.currentTurn === PLAYER_COLORS.WHITE ? 'win' : 'loss';
+                           
+                         await updateRatingsAfterGame(
+                           gameId,
+                           currentData.whitePlayer,
+                           currentData.blackPlayer,
+                           resultFromWhitePerspective
+                         );
+                         logger.info('useChessGame', 'Ratings updated for checkmate', { 
+                           gameId,
+                           winner: currentData.currentTurn 
+                         });
+                       } catch (error) {
+                         logger.error('useChessGame', 'Failed to update ratings for checkmate', { 
+                           error,
+                           gameId 
+                         });
+                       }
+                     }
                  }
             }
          }
