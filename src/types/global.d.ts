@@ -43,6 +43,8 @@ declare module 'chessTypes' {
     payoutProcessed?: boolean; // Whether game payout has been processed
     wagerDebitTimestamp?: any; // When wagers were debited
     payoutTimestamp?: any; // When payout was processed
+    creatorPreferredColor?: 'white' | 'black' | 'random'; // Preferred color by game creator
+    title?: string; // Game title
   }
 
   // User related types
@@ -72,6 +74,7 @@ declare module 'chessTypes' {
     lastOtpSent?: any;
     withdrawalUpiId?: string; // Added for storing user's preferred UPI ID
     role?: 'user' | 'admin' | 'super_admin'; // User role for permissions
+    isAdmin?: boolean; // Shorthand for checking admin status
   }
 
   // Stats related types
@@ -114,8 +117,9 @@ declare module 'chessTypes' {
 
   // Transaction related types
   export interface Transaction {
-    id?: string;
+    id: string; // Make id required instead of optional
     userId: string;
+    userName?: string; // User display name for UI display purposes
     type: TransactionType;
     amount: number;
     status: TransactionStatus;
@@ -130,12 +134,15 @@ declare module 'chessTypes' {
       processedBy?: string; // Admin who processed it
     };
     notes?: string;
+    platformFee?: number; // Fee charged by platform for the transaction
   }
 
   export type TransactionType = 
     | 'deposit' 
+    | 'deposit_initiated'
     | 'withdrawal_request' 
     | 'withdrawal_complete' 
+    | 'withdrawal_cancelled'
     | 'wager_debit' 
     | 'wager_payout' 
     | 'platform_fee' 
@@ -145,5 +152,6 @@ declare module 'chessTypes' {
     | 'pending' 
     | 'completed' 
     | 'failed' 
-    | 'cancelled';
+    | 'cancelled'
+    | 'rejected';
 } 

@@ -1,25 +1,58 @@
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { httpsCallable } from 'firebase/functions';
+import { getAuth } from 'firebase/auth';
+import { Transaction, TransactionType, TransactionStatus } from 'chessTypes';
+import { toast } from "react-toastify";
 import { 
-  getFirestore, 
   collection, 
   query, 
   where, 
   orderBy, 
   getDocs, 
-  addDoc, 
-  updateDoc,
+  serverTimestamp, 
+  addDoc,
   doc,
-  serverTimestamp,
+  updateDoc,
   limit,
   Timestamp
 } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
-import { Transaction, TransactionType, TransactionStatus } from 'chessTypes';
+import { db, functions } from '../firebase';
 
 // Firebase instances
-const db = getFirestore();
-const functions = getFunctions();
 const auth = getAuth();
+
+/**
+ * Create a Razorpay order for deposit
+ */
+export const createOrder = async (amount: number): Promise<any> => {
+  try {
+    const createRazorpayOrder = httpsCallable(functions, 'createRazorpayOrder');
+    const result = await createRazorpayOrder({ amount });
+    return result.data;
+  } catch (error: any) {
+    console.error("Error creating Razorpay order:", error);
+    toast.error(error.message || "Failed to create payment order");
+    throw error;
+  }
+};
+
+/**
+ * Verify Razorpay payment and update user balance
+ */
+export const verifyPayment = async (paymentData: {
+  razorpay_order_id: string;
+  razorpay_payment_id: string;
+  razorpay_signature: string;
+}): Promise<any> => {
+  try {
+    const verifyRazorpayPayment = httpsCallable(functions, 'verifyRazorpayPayment');
+    const result = await verifyRazorpayPayment(paymentData);
+    return result.data;
+  } catch (error: any) {
+    console.error("Error verifying payment:", error);
+    toast.error(error.message || "Failed to verify payment");
+    throw error;
+  }
+};
 
 /**
  * Process a deposit transaction
@@ -67,47 +100,14 @@ export const confirmDeposit = async (amount: number, upiTransactionId?: string):
 /**
  * Request a withdrawal 
  */
-export const requestWithdrawal = async (amount: number, upiId: string): Promise<{ success: boolean, transactionId?: string }> => {
+export const requestWithdrawal = async (amount: number, upiId: string): Promise<any> => {
   try {
-    if (!auth.currentUser) {
-      throw new Error('User must be logged in to request a withdrawal');
-    }
-    
-    const userId = auth.currentUser.uid;
-    const userEmail = auth.currentUser.email;
-    const displayName = auth.currentUser.displayName;
-    
-    // Create a withdrawal request transaction
-    const transactionRef = collection(db, 'transactions');
-    const newTransaction = await addDoc(transactionRef, {
-      userId,
-      type: 'withdrawal_request' as TransactionType,
-      amount,
-      status: 'pending' as TransactionStatus,
-      timestamp: serverTimestamp(),
-      withdrawalDetails: {
-        upiId,
-        username: displayName || userId,
-        email: userEmail
-      },
-      notes: `Withdrawal request of ₹${amount} to UPI ID: ${upiId}`
-    });
-
-    // Update user's pending withdrawal amount
-    // In production, this should be done with a cloud function to ensure consistency
-    const withdrawalFunction = httpsCallable(functions, 'requestWithdrawal');
-    await withdrawalFunction({ 
-      amount, 
-      transactionId: newTransaction.id,
-      upiId
-    });
-
-    return { 
-      success: true,
-      transactionId: newTransaction.id
-    };
+    const requestWithdrawalFn = httpsCallable(functions, 'requestWithdrawal');
+    const result = await requestWithdrawalFn({ amount, upiId });
+    return result.data;
   } catch (error: any) {
-    console.error('Error requesting withdrawal:', error);
+    console.error("Error requesting withdrawal:", error);
+    toast.error(error.message || "Failed to request withdrawal");
     throw error;
   }
 };
@@ -165,7 +165,7 @@ export const processGamePayout = async (
 /**
  * Fetch user transactions
  */
-export const getUserTransactions = async (userId: string): Promise<Transaction[]> => {
+export const getTransactionHistory = async (userId: string): Promise<Transaction[]> => {
   try {
     const transactionsRef = collection(db, 'transactions');
     const q = query(
@@ -187,8 +187,9 @@ export const getUserTransactions = async (userId: string): Promise<Transaction[]
     });
     
     return transactions;
-  } catch (error) {
-    console.error('Error fetching transactions:', error);
+  } catch (error: any) {
+    console.error("Error fetching transaction history:", error);
+    toast.error("Failed to load transaction history");
     throw error;
   }
 };

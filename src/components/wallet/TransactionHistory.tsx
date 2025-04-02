@@ -15,7 +15,7 @@ import {
   Alert
 } from '@mui/material';
 import { useAuth } from '../../hooks/useAuth';
-import { getUserTransactions } from '../../services/transactionService';
+import { getTransactionHistory } from '../../services/transactionService';
 import { Transaction, TransactionType, TransactionStatus } from 'chessTypes';
 import { format } from 'date-fns';
 
@@ -23,8 +23,10 @@ import { format } from 'date-fns';
 const getTransactionTypeLabel = (type: TransactionType): string => {
   const labels: Record<TransactionType, string> = {
     deposit: 'Deposit',
+    deposit_initiated: 'Deposit Initiated',
     withdrawal_request: 'Withdrawal Request',
     withdrawal_complete: 'Withdrawal',
+    withdrawal_cancelled: 'Withdrawal Cancelled',
     wager_debit: 'Game Wager',
     wager_payout: 'Game Winnings',
     platform_fee: 'Platform Fee',
@@ -39,7 +41,8 @@ const getStatusColor = (status: TransactionStatus): string => {
     pending: 'warning',
     completed: 'success',
     failed: 'error',
-    cancelled: 'default'
+    cancelled: 'default',
+    rejected: 'error'
   };
   return colors[status] || 'default';
 };
@@ -60,7 +63,7 @@ export const TransactionHistory: React.FC = () => {
       setError(null);
       
       try {
-        const data = await getUserTransactions(currentUser.uid);
+        const data = await getTransactionHistory(currentUser.uid);
         setTransactions(data);
       } catch (err: any) {
         console.error('Failed to fetch transactions:', err);

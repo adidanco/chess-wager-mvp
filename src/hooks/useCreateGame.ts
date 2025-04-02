@@ -1,121 +1,95 @@
-import { useState, useEffect, FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useContext } from "react";
 import { Chess } from "chess.js";
-import { collection, addDoc, serverTimestamp, DocumentReference } from "firebase/firestore";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase";
-import { DEFAULT_TIMER, GAME_STATUS, TIMER_OPTIONS, TimeOption } from "../utils/constants";
-import toast from "react-hot-toast";
+import { GAME_STATUS } from "../utils/constants";
+import { toast } from "react-hot-toast";
 import { logger } from "../utils/logger";
-import { useAuth } from "../context/AuthContext";
+import { AuthContext } from "../context/AuthContext";
 import { GameData } from "chessTypes";
-import { setGameWagerType } from "../services/wagerService";
 
-/**
- * Interface for the values returned by the useCreateGame hook
- */
-interface CreateGameHook {
-  wager: string;
-  setWager: (wager: string) => void;
-  timeOption: TimeOption;
-  setTimeOption: (option: TimeOption) => void;
-  isCreating: boolean;
-  userBalance: number;
-  isLoading: boolean;
-  useRealMoney: boolean;
-  setUseRealMoney: (useRealMoney: boolean) => void;
-  handleCreateGame: (e: FormEvent) => Promise<void>;
-  cancelCreation: () => void;
+interface GameOptions {
+  title: string;
+  wager: number;
+  isRealMoney: boolean;
+  creatorColor: 'white' | 'black' | 'random';
+  timeControl: number;
 }
 
-/**
- * Custom hook to manage game creation logic
- */
-const useCreateGame = (): CreateGameHook => {
-  const [wager, setWager] = useState<string>("");
-  const [timeOption, setTimeOption] = useState<TimeOption>("FIVE_MIN");
-  const [isCreating, setIsCreating] = useState<boolean>(false);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [useRealMoney, setUseRealMoney] = useState<boolean>(false);
-  
-  const navigate = useNavigate();
-  const { 
-    currentUser, 
-    balance, 
-    realMoneyBalance,
-    updateBalance,
-    updateProfile,
-    isAuthenticated 
-  } = useAuth();
+export const useCreateGame = () => {
+  const [loading, setLoading] = useState(false);
+  const { currentUser, userProfile, updateBalance } = useContext(AuthContext) || {};
 
-  // Check authentication
-  useEffect(() => {
-    if (!isAuthenticated) {
-      logger.warn('useCreateGame', 'User not authenticated, redirecting to login');
-      navigate("/login");
-    }
-  }, [isAuthenticated, navigate]);
-
-  /**
-   * Handle game creation form submission
-   */
-  const handleCreateGame = async (e: FormEvent): Promise<void> => {
-    e.preventDefault();
-    
+  const createGame = async (options: GameOptions): Promise<string | null> => {
     if (!currentUser) {
       toast.error("You must be logged in to create a game");
-      navigate("/login");
-      return;
+      return null;
     }
     
     // Validate wager
-    const wagerAmount = Number(wager);
-    if (isNaN(wagerAmount) || wagerAmount <= 0) {
+    if (options.wager < 0) {
       toast.error("Please enter a valid wager amount");
-      return;
+      return null;
     }
     
     // Check balance based on wager type
-    const availableBalance = useRealMoney ? realMoneyBalance : balance;
-    if (wagerAmount > (availableBalance || 0)) {
-      toast.error(`Insufficient ${useRealMoney ? 'real money' : 'game currency'} balance!`);
-      return;
+    if (options.wager > 0) {
+      const availableBalance = options.isRealMoney 
+        ? (userProfile?.realMoneyBalance || 0) 
+        : (userProfile?.balance || 0);
+        
+      if (options.wager > availableBalance) {
+        toast.error(`Insufficient ${options.isRealMoney ? 'real money' : 'game currency'} balance!`);
+        return null;
+      }
     }
     
-    setIsCreating(true);
+    setLoading(true);
     
     try {
       logger.info('useCreateGame', 'Creating new game', { 
         userId: currentUser.uid,
-        wager: wagerAmount,
-        timeControl: timeOption,
-        useRealMoney
+        wager: options.wager,
+        timeControl: options.timeControl,
+        isRealMoney: options.isRealMoney
       });
       
       // Initialize a new chess instance for the initial FEN
       const chess = new Chess();
       const initialFen = chess.fen();
       
-      // Get time control value in milliseconds
-      const timeControl = TIMER_OPTIONS[timeOption];
+      // Determine player colors
+      let whitePlayerId: string | undefined = undefined;
+      let blackPlayerId: string | undefined = undefined;
+      
+      if (options.creatorColor === 'white') {
+        whitePlayerId = currentUser.uid;
+      } else if (options.creatorColor === 'black') {
+        blackPlayerId = currentUser.uid;
+      } else {
+        // Random color assignment will happen when player joins
+      }
       
       // Create the game in Firestore
       const newGame: Partial<GameData> = {
-        whitePlayer: currentUser.uid,
-        blackPlayer: null,
+        title: options.title || `${currentUser.displayName || 'Anonymous'}'s Game`,
+        whitePlayer: whitePlayerId,
+        blackPlayer: blackPlayerId,
         player1Id: currentUser.uid, // Game creator ID
         player2Id: undefined, // Will be set when someone joins
-        wager: wagerAmount,
+        wager: options.wager,
         status: GAME_STATUS.WAITING,
         createdAt: serverTimestamp(),
         fen: initialFen,
         currentTurn: "w",
-        whiteTime: timeControl,
-        blackTime: timeControl,
-        timeControl: timeControl,
+        whiteTime: options.timeControl * 1000, // Convert to ms
+        blackTime: options.timeControl * 1000, // Convert to ms
+        timeControl: options.timeControl * 1000, // Convert to ms
         moveHistory: [],
-        useRealMoney, // Add flag for real money games
+        useRealMoney: options.isRealMoney, // Add flag for real money games
         wagersDebited: false, // Will be set to true when wagers are debited
-        payoutProcessed: false // Will be set to true when payout is processed
+        payoutProcessed: false, // Will be set to true when payout is processed
+        creatorPreferredColor: options.creatorColor
       };
       
       const gameRef = await addDoc(collection(db, "games"), newGame);
@@ -123,55 +97,30 @@ const useCreateGame = (): CreateGameHook => {
       logger.info('useCreateGame', 'Game created successfully', { 
         gameId: gameRef.id,
         userId: currentUser.uid,
-        timeControl: timeOption,
-        useRealMoney
+        timeControl: options.timeControl,
+        isRealMoney: options.isRealMoney
       });
       
-      // Set the game's wager type (real money or game currency)
-      await setGameWagerType(gameRef.id, useRealMoney);
-      
       // For game currency, we'll deduct the amount immediately
-      // For real money, this will be handled when the game starts
-      if (!useRealMoney) {
+      // For real money, this will be handled when the game starts via cloud functions
+      if (options.wager > 0 && !options.isRealMoney) {
         // Deduct wager from user's balance
-        await updateBalance(-wagerAmount, "game creation");
+        await updateBalance?.(-options.wager, "game creation");
       }
       
-      toast.success("Game created! Waiting for opponent...");
-      navigate(`/game/${gameRef.id}`);
+      return gameRef.id;
     } catch (error) {
       const err = error as Error;
       logger.error('useCreateGame', 'Error creating game', { 
         error: err, 
         userId: currentUser?.uid 
       });
-      toast.error("Error creating game!");
+      toast.error(err.message || "Error creating game!");
+      return null;
     } finally {
-      setIsCreating(false);
+      setLoading(false);
     }
   };
 
-  /**
-   * Cancel game creation and navigate back
-   */
-  const cancelCreation = (): void => {
-    logger.debug('useCreateGame', 'Cancelling game creation');
-    navigate("/");
-  };
-
-  return {
-    wager,
-    setWager,
-    timeOption,
-    setTimeOption,
-    isCreating,
-    userBalance: balance,
-    isLoading,
-    useRealMoney,
-    setUseRealMoney,
-    handleCreateGame,
-    cancelCreation
-  };
-};
-
-export default useCreateGame; 
+  return { createGame, loading };
+}; 

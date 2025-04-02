@@ -1,6 +1,8 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route } from "react-router-dom"
 import { Toaster } from "react-hot-toast"
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import ErrorBoundary from "./components/ErrorBoundary"
 import { GameProvider } from "./context/GameContext"
 import { AuthProvider } from "./context/AuthContext"
@@ -44,6 +46,7 @@ function App(): JSX.Element {
           <BrowserRouter>
             <div className="min-h-screen bg-gray-100">
               <Toaster position="top-center" />
+              <ToastContainer position="top-right" autoClose={5000} />
               <Routes>
                 <Route path="/" element={<Home />} />
                 <Route path="/login" element={<Login />} />
