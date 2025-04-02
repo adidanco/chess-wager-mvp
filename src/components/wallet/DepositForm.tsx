@@ -3,6 +3,7 @@ import { Box, Button, TextField, Typography, Paper, CircularProgress, Alert } fr
 import { confirmDeposit, createOrder, verifyPayment } from '../../services/transactionService';
 import { useAuth } from '../../hooks/useAuth';
 import { toast } from 'react-hot-toast';
+import { razorpayConfig } from '../../firebaseConfig';
 
 // Define Razorpay interface for TypeScript
 declare global {
@@ -69,7 +70,7 @@ export const DepositForm: React.FC = () => {
       
       // Initialize Razorpay checkout
       const options = {
-        key: 'rzp_test_KbdfYshEMu83sH', // Your Razorpay test key
+        key: razorpayConfig.key, // Using imported config
         amount: amount * 100, // amount in paise
         currency: 'INR',
         name: 'Chess Wager',

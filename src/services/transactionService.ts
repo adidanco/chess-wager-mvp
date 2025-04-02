@@ -1,7 +1,7 @@
 import { httpsCallable } from 'firebase/functions';
 import { getAuth } from 'firebase/auth';
 import { Transaction, TransactionType, TransactionStatus } from 'chessTypes';
-import { toast } from "react-toastify";
+import { toast } from "react-hot-toast";
 import { 
   collection, 
   query, 

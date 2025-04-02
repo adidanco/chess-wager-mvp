@@ -3,7 +3,7 @@ import { AuthContext } from '../context/AuthContext';
 import { httpsCallable } from 'firebase/functions';
 import { functions, db } from '../firebase';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'react-toastify';
+import { toast } from 'react-hot-toast';
 import PageLayout from '../components/common/PageLayout';
 import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 import { Transaction } from 'chessTypes';

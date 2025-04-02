@@ -50,6 +50,7 @@ interface GameWagerData {
   player1Id: string;
   player2Id: string;
   wagerAmount: number;
+  idempotencyKey: string;
 }
 
 interface GamePayoutData {
@@ -58,6 +59,7 @@ interface GamePayoutData {
   loserId: string | null;
   isDraw: boolean;
   wagerAmount: number;
+  idempotencyKey: string;
 }
 
 interface WithdrawalRequestData {
@@ -308,122 +310,141 @@ export const confirmDeposit = functions.https.onCall((data, context) => {
 });
 
 /**
- * Function to debit wagers from both players when a game starts
+ * Function to debit wagers from both players at the start of a game
  */
 export const debitWagersForGame = functions.https.onCall((data, context) => {
   // Check authentication
   if (!context?.auth) {
     throw new functions.https.HttpsError(
       "unauthenticated",
-      "User is not authenticated"
+      "User must be logged in to process wagers"
     );
   }
 
-  const userId = context.auth.uid;
-  const { gameId, player1Id, player2Id, wagerAmount } = data as GameWagerData;
-
-  if (userId !== player1Id && userId !== player2Id) {
-    throw new functions.https.HttpsError(
-      "permission-denied",
-      "User cannot initiate wager debit for this game"
-    );
-  }
+  const { gameId, player1Id, player2Id, wagerAmount, idempotencyKey } = data as GameWagerData & { idempotencyKey: string };
   
-  if (typeof wagerAmount !== 'number' || wagerAmount <= 0) {
+  if (!gameId || !player1Id || !player2Id || typeof wagerAmount !== 'number' || wagerAmount <= 0) {
     throw new functions.https.HttpsError(
       "invalid-argument",
-      "Invalid wager amount"
+      "Invalid game wager data provided"
+    );
+  }
+
+  // Validate that requesting user is one of the players
+  const requestingUserId = context.auth.uid;
+  if (requestingUserId !== player1Id && requestingUserId !== player2Id) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Only participating players can initiate wagers"
     );
   }
 
   const player1Ref = db.collection("users").doc(player1Id);
   const player2Ref = db.collection("users").doc(player2Id);
-  const gameRef = db.collection("games").doc(gameId);
   const transactionsRef = db.collection("transactions");
+  
+  // First check if this operation has already been processed (idempotency check)
+  return transactionsRef
+    .where("idempotencyKey", "==", idempotencyKey)
+    .where("type", "==", "wager_debit")
+    .where("relatedGameId", "==", gameId)
+    .get()
+    .then(snapshot => {
+      // If we find matching transactions, this operation was already processed
+      if (!snapshot.empty) {
+        functions.logger.info(`Idempotent operation detected: ${idempotencyKey} for game ${gameId} already processed`);
+        return { success: true, idempotent: true };
+      }
+      
+      // If no matching transactions found, proceed with the transaction
+      return db.runTransaction(async (t) => {
+        const p1Doc = await t.get(player1Ref);
+        const p2Doc = await t.get(player2Ref);
 
-  return db.runTransaction(async (t) => {
-    const p1Doc = await t.get(player1Ref);
-    const p2Doc = await t.get(player2Ref);
+        if (!p1Doc.exists || !p2Doc.exists) {
+          throw new functions.https.HttpsError(
+            "not-found",
+            "One or both players not found"
+          );
+        }
 
-    if (!p1Doc.exists || !p2Doc.exists) {
+        const p1Data = p1Doc.data();
+        const p2Data = p2Doc.data();
+        
+        if (!p1Data || !p2Data) {
+          throw new functions.https.HttpsError(
+            "not-found",
+            "Player data is missing"
+          );
+        }
+
+        const p1Balance = p1Data.realMoneyBalance || 0;
+        const p2Balance = p2Data.realMoneyBalance || 0;
+
+        if (p1Balance < wagerAmount) {
+          throw new functions.https.HttpsError(
+            "failed-precondition",
+            "Player 1 has insufficient balance for the wager"
+          );
+        }
+        
+        if (p2Balance < wagerAmount) {
+          throw new functions.https.HttpsError(
+            "failed-precondition",
+            "Player 2 has insufficient balance for the wager"
+          );
+        }
+
+        // Generate transaction ID for player 1 with idempotency key
+        const transaction1Ref = transactionsRef.doc();
+        
+        // Debit Player 1
+        t.update(player1Ref, { 
+          realMoneyBalance: admin.firestore.FieldValue.increment(-wagerAmount),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+        t.set(transaction1Ref, { 
+          userId: player1Id,
+          type: 'wager_debit',
+          amount: wagerAmount,
+          status: 'completed',
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          relatedGameId: gameId,
+          idempotencyKey, // Store the idempotency key
+          notes: `Wager debited for game ${gameId}`
+        });
+
+        // Generate transaction ID for player 2
+        const transaction2Ref = transactionsRef.doc();
+        
+        // Debit Player 2
+        t.update(player2Ref, { 
+          realMoneyBalance: admin.firestore.FieldValue.increment(-wagerAmount),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+        t.set(transaction2Ref, {
+          userId: player2Id,
+          type: 'wager_debit',
+          amount: wagerAmount,
+          status: 'completed',
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          relatedGameId: gameId,
+          idempotencyKey, // Store the idempotency key
+          notes: `Wager debited for game ${gameId}`
+        });
+
+        functions.logger.info(`Debited wager of ${wagerAmount} from players ${player1Id} and ${player2Id} for game ${gameId}`);
+        
+        return { success: true, idempotent: false };
+      });
+    })
+    .catch(error => {
+      functions.logger.error(`Error debiting wagers: ${error.message}`, { gameId, player1Id, player2Id });
       throw new functions.https.HttpsError(
-        "not-found",
-        "One or both players not found"
+        "internal",
+        error.message || "Failed to debit wagers"
       );
-    }
-
-    const p1Data = p1Doc.data();
-    const p2Data = p2Doc.data();
-    
-    if (!p1Data || !p2Data) {
-      throw new functions.https.HttpsError(
-        "not-found",
-        "Player data is missing"
-      );
-    }
-
-    const p1Balance = p1Data.realMoneyBalance || 0;
-    const p2Balance = p2Data.realMoneyBalance || 0;
-
-    if (p1Balance < wagerAmount) {
-      throw new functions.https.HttpsError(
-        "failed-precondition",
-        "Player 1 has insufficient balance for the wager"
-      );
-    }
-    
-    if (p2Balance < wagerAmount) {
-      throw new functions.https.HttpsError(
-        "failed-precondition",
-        "Player 2 has insufficient balance for the wager"
-      );
-    }
-
-    // Debit Player 1
-    t.update(player1Ref, { 
-      realMoneyBalance: admin.firestore.FieldValue.increment(-wagerAmount),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
-    t.set(transactionsRef.doc(), { 
-      userId: player1Id,
-      type: 'wager_debit',
-      amount: wagerAmount,
-      status: 'completed',
-      timestamp: admin.firestore.FieldValue.serverTimestamp(),
-      relatedGameId: gameId,
-      notes: `Wager debited for game ${gameId}`
-    });
-
-    // Debit Player 2
-    t.update(player2Ref, { 
-      realMoneyBalance: admin.firestore.FieldValue.increment(-wagerAmount),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp()
-    });
-    t.set(transactionsRef.doc(), {
-      userId: player2Id,
-      type: 'wager_debit',
-      amount: wagerAmount,
-      status: 'completed',
-      timestamp: admin.firestore.FieldValue.serverTimestamp(),
-      relatedGameId: gameId,
-      notes: `Wager debited for game ${gameId}`
-    });
-
-    // Update Game state to track that wagers have been debited
-    t.update(gameRef, { 
-      wagersDebited: true,
-      wagerDebitTimestamp: admin.firestore.FieldValue.serverTimestamp()
-    });
-
-    functions.logger.info(`Wagers debited for game ${gameId}, amount ${wagerAmount}`);
-    return { success: true };
-  }).catch((error: any) => {
-    functions.logger.error(`Failed to debit wagers for game ${gameId}`, error);
-    throw new functions.https.HttpsError(
-      "internal",
-      error.message || "Failed to debit wagers"
-    );
-  });
 });
 
 /**
@@ -434,12 +455,12 @@ export const processGamePayout = functions.https.onCall((data, context) => {
   if (!context?.auth) {
     throw new functions.https.HttpsError(
       "unauthenticated",
-      "User is not authenticated"
+      "User must be logged in to process payouts"
     );
   }
 
   const userId = context.auth.uid;
-  const { gameId, winnerId, loserId, isDraw, wagerAmount } = data as GamePayoutData;
+  const { gameId, winnerId, loserId, isDraw, wagerAmount, idempotencyKey } = data as GamePayoutData & { idempotencyKey: string };
   
   if (typeof wagerAmount !== 'number' || wagerAmount <= 0) {
     throw new functions.https.HttpsError(
@@ -453,103 +474,121 @@ export const processGamePayout = functions.https.onCall((data, context) => {
   const gameRef = db.collection("games").doc(gameId);
   const transactionsRef = db.collection("transactions");
 
-  // First verify the game exists and has wagersDebited set to true
-  return gameRef.get().then(gameDoc => {
-    if (!gameDoc.exists) {
-      throw new functions.https.HttpsError(
-        "not-found",
-        "Game not found"
-      );
-    }
-    
-    const gameData = gameDoc.data();
-    if (!gameData?.wagersDebited) {
-      throw new functions.https.HttpsError(
-        "failed-precondition",
-        "Cannot process payout for game without debited wagers"
-      );
-    }
-    
-    if (gameData?.payoutProcessed) {
-      throw new functions.https.HttpsError(
-        "already-exists",
-        "Payout has already been processed for this game"
-      );
-    }
-
-    return db.runTransaction(async (t) => {
-      // Handle draw (return wagers to both players)
-      if (isDraw && winnerRef && loserRef) {
-        // Return wager to player 1
-        t.update(winnerRef, {
-          realMoneyBalance: admin.firestore.FieldValue.increment(wagerAmount),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp()
-        });
-        t.set(transactionsRef.doc(), {
-          userId: winnerId,
-          type: 'wager_refund',
-          amount: wagerAmount, 
-          status: 'completed',
-          timestamp: admin.firestore.FieldValue.serverTimestamp(),
-          relatedGameId: gameId,
-          notes: `Wager refunded due to draw in game ${gameId}`
-        });
-        
-        // Return wager to player 2
-        t.update(loserRef, {
-          realMoneyBalance: admin.firestore.FieldValue.increment(wagerAmount),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp()
-        });
-        t.set(transactionsRef.doc(), {
-          userId: loserId,
-          type: 'wager_refund',
-          amount: wagerAmount,
-          status: 'completed',
-          timestamp: admin.firestore.FieldValue.serverTimestamp(),
-          relatedGameId: gameId,
-          notes: `Wager refunded due to draw in game ${gameId}`
-        });
-      } 
-      // Winner takes all (one player wins)
-      else if (winnerRef) {
-        // Calculate total pool and platform fee
-        const totalPool = wagerAmount * 2;
-        const platformFee = Math.floor(totalPool * 0.05); // 5% platform fee
-        const winnerPayout = totalPool - platformFee;
-        
-        // Credit winner with winnings after fee
-        t.update(winnerRef, {
-          realMoneyBalance: admin.firestore.FieldValue.increment(winnerPayout),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp()
-        });
-        t.set(transactionsRef.doc(), {
-          userId: winnerId,
-          type: 'wager_payout',
-          amount: winnerPayout,
-          status: 'completed',
-          timestamp: admin.firestore.FieldValue.serverTimestamp(),
-          relatedGameId: gameId,
-          platformFee: platformFee,
-          notes: `Winnings from game ${gameId} (after 5% platform fee)`
-        });
+  // First check if this operation has already been processed using idempotency key
+  return transactionsRef
+    .where("idempotencyKey", "==", idempotencyKey)
+    .where("type", "in", ["wager_payout", "wager_refund"])
+    .where("relatedGameId", "==", gameId)
+    .get()
+    .then(snapshot => {
+      // If we find matching transactions, this operation was already processed
+      if (!snapshot.empty) {
+        functions.logger.info(`Idempotent operation detected: ${idempotencyKey} for game ${gameId} already processed`);
+        return { success: true, idempotent: true };
       }
-      
-      // Mark the game as having processed the payout
-      t.update(gameRef, {
-        payoutProcessed: true,
-        payoutTimestamp: admin.firestore.FieldValue.serverTimestamp()
-      });
 
-      functions.logger.info(`Game payout processed for game ${gameId}`);
-      return { success: true };
+      // Verify the game exists and has wagersDebited set to true
+      return gameRef.get().then(gameDoc => {
+        if (!gameDoc.exists) {
+          throw new functions.https.HttpsError(
+            "not-found",
+            "Game not found"
+          );
+        }
+        
+        const gameData = gameDoc.data();
+        if (!gameData?.wagersDebited) {
+          throw new functions.https.HttpsError(
+            "failed-precondition",
+            "Cannot process payout for game without debited wagers"
+          );
+        }
+        
+        if (gameData?.payoutProcessed) {
+          throw new functions.https.HttpsError(
+            "already-exists",
+            "Payout has already been processed for this game"
+          );
+        }
+
+        return db.runTransaction(async (t) => {
+          // Handle draw (return wagers to both players)
+          if (isDraw && winnerRef && loserRef) {
+            // Return wager to player 1
+            t.update(winnerRef, {
+              realMoneyBalance: admin.firestore.FieldValue.increment(wagerAmount),
+              updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+            t.set(transactionsRef.doc(), {
+              userId: winnerId,
+              type: 'wager_refund',
+              amount: wagerAmount, 
+              status: 'completed',
+              timestamp: admin.firestore.FieldValue.serverTimestamp(),
+              relatedGameId: gameId,
+              idempotencyKey,
+              notes: `Wager refunded due to draw in game ${gameId}`
+            });
+            
+            // Return wager to player 2
+            t.update(loserRef, {
+              realMoneyBalance: admin.firestore.FieldValue.increment(wagerAmount),
+              updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+            t.set(transactionsRef.doc(), {
+              userId: loserId,
+              type: 'wager_refund',
+              amount: wagerAmount,
+              status: 'completed',
+              timestamp: admin.firestore.FieldValue.serverTimestamp(),
+              relatedGameId: gameId,
+              idempotencyKey,
+              notes: `Wager refunded due to draw in game ${gameId}`
+            });
+          } 
+          // Winner takes all (one player wins)
+          else if (winnerRef) {
+            // Calculate total pool and platform fee
+            const totalPool = wagerAmount * 2;
+            const platformFee = Math.floor(totalPool * 0.05); // 5% platform fee
+            const winnerPayout = totalPool - platformFee;
+            
+            // Credit winner with winnings after fee
+            t.update(winnerRef, {
+              realMoneyBalance: admin.firestore.FieldValue.increment(winnerPayout),
+              updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+            t.set(transactionsRef.doc(), {
+              userId: winnerId,
+              type: 'wager_payout',
+              amount: winnerPayout,
+              status: 'completed',
+              timestamp: admin.firestore.FieldValue.serverTimestamp(),
+              relatedGameId: gameId,
+              idempotencyKey,
+              platformFee: platformFee,
+              notes: `Winnings from game ${gameId} (after 5% platform fee)`
+            });
+          }
+          
+          // Mark the game as having processed the payout
+          t.update(gameRef, {
+            payoutProcessed: true,
+            payoutTimestamp: admin.firestore.FieldValue.serverTimestamp()
+          });
+
+          functions.logger.info(`Game payout processed for game ${gameId}`);
+          return { success: true, idempotent: false };
+        });
+      });
+    })
+    .catch((error: any) => {
+      functions.logger.error(`Failed to process payout for game ${gameId}`, error);
+      throw new functions.https.HttpsError(
+        "internal",
+        error.message || "Failed to process game payout"
+      );
     });
-  }).catch((error: any) => {
-    functions.logger.error(`Failed to process payout for game ${gameId}`, error);
-    throw new functions.https.HttpsError(
-      "internal",
-      error.message || "Failed to process game payout"
-    );
-  });
 });
 
 /**

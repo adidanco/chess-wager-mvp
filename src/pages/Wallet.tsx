@@ -4,7 +4,7 @@ import { createOrder, verifyPayment, requestWithdrawal, getTransactionHistory } 
 import { Transaction } from 'chessTypes';
 import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'react-toastify';
+import { toast } from 'react-hot-toast';
 import WalletNavigation from '../components/wallet/WalletNavigation';
 import PageLayout from '../components/common/PageLayout';
 

@@ -1,8 +1,10 @@
 import { doc, updateDoc, getDoc, serverTimestamp, increment, runTransaction } from 'firebase/firestore';
-import { db } from '../firebase';
-import { debitWagersForGame, processGamePayout } from './transactionService';
+import { db, functions } from '../firebase';
+import { processGamePayout } from './transactionService';
 import { logger } from '../utils/logger';
 import { GameStatus } from '../utils/constants';
+import { httpsCallable } from 'firebase/functions';
+import { v4 as uuidv4 } from 'uuid';
 
 /**
  * Update the game document to use real money wager
@@ -21,6 +23,32 @@ export const setGameWagerType = async (
     });
   } catch (error) {
     logger.error('wagerService', 'Failed to set game wager type', { gameId, error });
+    throw error;
+  }
+};
+
+// Function to debit wagers from both players
+const debitWagersForGame = async (
+  gameId: string,
+  player1Id: string,
+  player2Id: string,
+  wagerAmount: number
+): Promise<{ success: boolean }> => {
+  try {
+    // Generate a unique idempotency key to prevent duplicate transactions
+    const idempotencyKey = `wager_${gameId}_${Date.now()}_${uuidv4().substring(0, 8)}`;
+    
+    const debitWagersFn = httpsCallable(functions, 'debitWagersForGame');
+    const result = await debitWagersFn({ 
+      gameId, 
+      player1Id, 
+      player2Id, 
+      wagerAmount,
+      idempotencyKey 
+    });
+    return result.data as { success: boolean };
+  } catch (error: any) {
+    console.error('Error debiting wagers:', error);
     throw error;
   }
 };
@@ -47,6 +75,10 @@ export const processGameStart = async (
       return result.success;
     } else {
       // Handle in-game currency through Firestore transactions
+      
+      // Generate a unique idempotency key for tracking this transaction
+      const idempotencyKey = `wager_${gameId}_${Date.now()}_${uuidv4().substring(0, 8)}`;
+      
       await runTransaction(db, async (transaction) => {
         // Get player documents
         const player1Ref = doc(db, 'users', player1Id);
@@ -82,37 +114,48 @@ export const processGameStart = async (
           updatedAt: serverTimestamp(),
         });
         
-        // Update game
-        const gameRef = doc(db, 'games', gameId);
-        transaction.update(gameRef, {
-          wagersDebited: true,
-          wagerDebitTimestamp: serverTimestamp(),
+        // Create transaction records (for tracking and idempotency)
+        const transactionsColRef = doc(db, 'transactions', `${gameId}_p1_${Date.now()}`);
+        transaction.set(transactionsColRef, {
+          userId: player1Id,
+          type: 'wager_debit',
+          amount: wagerAmount,
+          status: 'completed',
+          timestamp: serverTimestamp(),
+          relatedGameId: gameId,
+          idempotencyKey,
+          notes: `Wager debited for game ${gameId}`
+        });
+        
+        const transactionsColRef2 = doc(db, 'transactions', `${gameId}_p2_${Date.now()}`);
+        transaction.set(transactionsColRef2, {
+          userId: player2Id,
+          type: 'wager_debit',
+          amount: wagerAmount,
+          status: 'completed',
+          timestamp: serverTimestamp(),
+          relatedGameId: gameId,
+          idempotencyKey,
+          notes: `Wager debited for game ${gameId}`
         });
       });
       
       return true;
     }
-  } catch (error) {
-    logger.error('wagerService', 'Failed to process game start wager', { 
-      gameId, 
-      player1Id, 
-      player2Id, 
-      wagerAmount,
-      useRealMoney,
-      error 
-    });
-    return false;
+  } catch (error: any) {
+    console.error('Error processing game start:', error);
+    throw error;
   }
 };
 
 /**
- * Process payouts when a game ends
+ * Process game end and handle payouts
  * @param gameId ID of the game
- * @param winnerId ID of the winner (null for draw)
- * @param loserId ID of the loser (null for draw)
- * @param isDraw Whether the game ended in a draw
- * @param wagerAmount Amount that was wagered
- * @param useRealMoney Whether real money was used for this game
+ * @param winnerId ID of the winner (null if draw)
+ * @param loserId ID of the loser (null if draw)
+ * @param isDraw Whether the game is a draw
+ * @param wagerAmount Amount wagered per player
+ * @param useRealMoney Whether to use real money for this game
  */
 export const processGameEnd = async (
   gameId: string,
@@ -123,82 +166,143 @@ export const processGameEnd = async (
   useRealMoney: boolean
 ): Promise<boolean> => {
   try {
-    // Get game document to check if wagers were debited
-    const gameRef = doc(db, 'games', gameId);
-    const gameDoc = await getDoc(gameRef);
-    
-    if (!gameDoc.exists()) {
-      logger.error('wagerService', 'Game not found', { gameId });
-      return false;
-    }
-    
-    const gameData = gameDoc.data();
-    
-    if (!gameData.wagersDebited) {
-      logger.error('wagerService', 'Wagers were not debited for this game', { gameId });
-      return false;
-    }
-    
-    // Check if payout was already processed
-    if (gameData.payoutProcessed) {
-      logger.info('wagerService', 'Payout already processed for this game', { gameId });
-      return true;
-    }
+    logger.info('wagerService', 'Processing game end', { 
+      gameId, 
+      winnerId, 
+      loserId, 
+      isDraw, 
+      wagerAmount,
+      useRealMoney
+    });
+
+    // Generate a unique idempotency key for this payout operation
+    const idempotencyKey = `payout_${gameId}_${Date.now()}_${uuidv4().substring(0, 8)}`;
     
     if (useRealMoney) {
-      // Handle real money transaction through Firebase Functions
-      const result = await processGamePayout(gameId, winnerId, loserId, isDraw, wagerAmount);
-      return result.success;
+      // Handle real money payout through Cloud Functions
+      const payoutFn = httpsCallable(functions, 'processGamePayout');
+      const result = await payoutFn({ 
+        gameId, 
+        winnerId, 
+        loserId, 
+        isDraw, 
+        wagerAmount,
+        idempotencyKey
+      });
+      
+      const payoutResult = result.data as { success: boolean };
+      logger.info('wagerService', 'Real money payout processed', { 
+        gameId, 
+        result: payoutResult 
+      });
+      
+      return payoutResult.success;
     } else {
       // Handle in-game currency through Firestore transactions
       await runTransaction(db, async (transaction) => {
+        // Get game document first to check if payout already processed
+        const gameRef = doc(db, 'games', gameId);
+        const gameDoc = await transaction.get(gameRef);
+        
+        if (!gameDoc.exists()) {
+          throw new Error('Game not found');
+        }
+        
+        const gameData = gameDoc.data();
+        
+        if (gameData?.payoutProcessed) {
+          logger.warn('wagerService', 'Payout already processed', { gameId });
+          return; // Exit early if already processed
+        }
+        
         if (isDraw) {
-          // Refund both players
-          if (winnerId && loserId) {
-            const winner = doc(db, 'users', winnerId);
-            const loser = doc(db, 'users', loserId);
-            
-            transaction.update(winner, {
+          // In case of a draw, return wagered amount to both players
+          if (winnerId) {
+            const winnerRef = doc(db, 'users', winnerId);
+            transaction.update(winnerRef, {
               balance: increment(wagerAmount),
-              updatedAt: serverTimestamp(),
+              updatedAt: serverTimestamp()
             });
             
-            transaction.update(loser, {
+            const transactionRef1 = doc(db, 'transactions', `${gameId}_draw_p1_${Date.now()}`);
+            transaction.set(transactionRef1, {
+              userId: winnerId,
+              type: 'wager_refund',
+              amount: wagerAmount, 
+              status: 'completed',
+              timestamp: serverTimestamp(),
+              relatedGameId: gameId,
+              idempotencyKey,
+              notes: `Refund for draw in game ${gameId}`
+            });
+          }
+          
+          if (loserId) {
+            const loserRef = doc(db, 'users', loserId);
+            transaction.update(loserRef, {
               balance: increment(wagerAmount),
-              updatedAt: serverTimestamp(),
+              updatedAt: serverTimestamp()
+            });
+            
+            const transactionRef2 = doc(db, 'transactions', `${gameId}_draw_p2_${Date.now()}`);
+            transaction.set(transactionRef2, {
+              userId: loserId,
+              type: 'wager_refund',
+              amount: wagerAmount,
+              status: 'completed',
+              timestamp: serverTimestamp(),
+              relatedGameId: gameId,
+              idempotencyKey,
+              notes: `Refund for draw in game ${gameId}`
             });
           }
         } else if (winnerId) {
-          // Winner takes all (minus platform fee)
-          const winner = doc(db, 'users', winnerId);
-          const poolAmount = wagerAmount * 2;
-          const platformFee = poolAmount * 0.2; // 20% platform fee
-          const payoutAmount = poolAmount - platformFee;
+          // Calculate total pot and platform fee
+          const totalPot = wagerAmount * 2;
+          const platformFee = Math.floor(totalPot * 0.05); // 5% platform fee
+          const winnerPayout = totalPot - platformFee;
           
-          transaction.update(winner, {
-            balance: increment(payoutAmount),
-            updatedAt: serverTimestamp(),
+          // Update winner's balance
+          const winnerRef = doc(db, 'users', winnerId);
+          transaction.update(winnerRef, {
+            balance: increment(winnerPayout),
+            updatedAt: serverTimestamp()
+          });
+          
+          // Record the payout transaction
+          const transactionRef = doc(db, 'transactions', `${gameId}_payout_${Date.now()}`);
+          transaction.set(transactionRef, {
+            userId: winnerId,
+            type: 'wager_payout',
+            amount: winnerPayout,
+            status: 'completed',
+            timestamp: serverTimestamp(),
+            relatedGameId: gameId,
+            platformFee,
+            idempotencyKey,
+            notes: `Winnings from game ${gameId} (after 5% platform fee)`
           });
         }
         
-        // Mark payout as processed
+        // Mark the game as having processed payout
         transaction.update(gameRef, {
           payoutProcessed: true,
-          payoutTimestamp: serverTimestamp(),
+          payoutTimestamp: serverTimestamp()
         });
+      });
+      
+      logger.info('wagerService', 'In-game currency payout processed', { 
+        gameId, 
+        isDraw, 
+        winnerId 
       });
       
       return true;
     }
-  } catch (error) {
+  } catch (error: any) {
     logger.error('wagerService', 'Failed to process game end payout', { 
-      gameId, 
-      winnerId, 
-      loserId,
-      isDraw,
-      wagerAmount,
-      useRealMoney,
-      error
+      error: error.message, 
+      gameId 
     });
     return false;
   }
