@@ -1,10 +1,10 @@
-# This file deploys to Firebase Hosting when changes are pushed to the typescript-migration branch
+# This file deploys to Firebase Hosting when changes are pushed to the stable-typescript branch
 
 name: Deploy to Firebase Hosting from TypeScript Branch
 on:
   push:
     branches:
-      - typescript-migration
+      - stable-typescript
 
 jobs:
   build_and_deploy:
