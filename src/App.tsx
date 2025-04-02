@@ -58,7 +58,7 @@ function App(): JSX.Element {
                 <Route path="/wallet" element={<Wallet />} />
                 <Route path="/admin" element={<AdminDashboard />} />
                 <Route path="/ContactUs" element={<ContactUs />} />
-                <Route path="/TermsAndConditions" element={<TermsAndConditions />} />
+                <Route path="/TermsandConditions" element={<TermsAndConditions />} />
                 <Route path="/test-constants" element={<TestConstants />} />
               </Routes>
             </div>

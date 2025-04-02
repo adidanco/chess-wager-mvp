@@ -56,7 +56,7 @@ const PageLayout = ({
             <Link component={RouterLink} to="/ContactUs" color="text.secondary" underline="hover">
               Contact Us
             </Link>
-            <Link component={RouterLink} to="/TermsAndConditions" color="text.secondary" underline="hover">
+            <Link component={RouterLink} to="/TermsandConditions" color="text.secondary" underline="hover">
               Terms & Conditions
             </Link>
           </Box>
