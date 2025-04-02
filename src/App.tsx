@@ -20,6 +20,8 @@ import Settings from "./pages/Settings"
 import ForgotPassword from "./pages/ForgotPassword"
 import Wallet from "./pages/Wallet"
 import AdminDashboard from "./pages/AdminDashboard"
+import ContactUs from "./pages/ContactUs"
+import TermsAndConditions from "./pages/TermsAndConditions"
 import TestConstants from "./test-constants"
 
 // Wrap Firestore operations with network check
@@ -55,6 +57,8 @@ function App(): JSX.Element {
                 <Route path="/settings" element={<Settings />} />
                 <Route path="/wallet" element={<Wallet />} />
                 <Route path="/admin" element={<AdminDashboard />} />
+                <Route path="/ContactUs" element={<ContactUs />} />
+                <Route path="/TermsAndConditions" element={<TermsAndConditions />} />
                 <Route path="/test-constants" element={<TestConstants />} />
               </Routes>
             </div>

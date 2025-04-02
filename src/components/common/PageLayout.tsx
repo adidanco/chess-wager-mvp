@@ -1,6 +1,7 @@
 import React, { ReactNode } from "react";
 import Navigation from "./Navigation";
-import { Box, Container } from "@mui/material";
+import { Box, Container, Typography, Link } from "@mui/material";
+import { Link as RouterLink } from "react-router-dom";
 
 /**
  * Props interface for PageLayout component
@@ -35,6 +36,33 @@ const PageLayout = ({
           ) : (
             children
           )}
+        </Container>
+      </Box>
+      
+      {/* Footer with legal links */}
+      <Box 
+        component="footer" 
+        sx={{ 
+          py: 3, 
+          px: 2, 
+          mt: 'auto',
+          backgroundColor: 'background.paper',
+          borderTop: '1px solid',
+          borderColor: 'divider'
+        }}
+      >
+        <Container maxWidth="lg">
+          <Box sx={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: 3 }}>
+            <Link component={RouterLink} to="/ContactUs" color="text.secondary" underline="hover">
+              Contact Us
+            </Link>
+            <Link component={RouterLink} to="/TermsAndConditions" color="text.secondary" underline="hover">
+              Terms & Conditions
+            </Link>
+          </Box>
+          <Typography variant="body2" color="text.secondary" align="center" sx={{ mt: 1 }}>
+            &copy; {new Date().getFullYear()} Chess Wager. All rights reserved.
+          </Typography>
         </Container>
       </Box>
     </div>

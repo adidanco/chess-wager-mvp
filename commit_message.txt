@@ -1,0 +1,35 @@
+feat(transactions): Implement real money transactions with UPI integration
+
+This major update adds complete real money transaction capabilities with UPI support for the Indian market. The implementation includes:
+
+TRANSACTION SYSTEM:
+- Add real money balance tracking in user profiles
+- Implement deposit flow with QR code generation for UPI payments
+- Create withdrawal request system with admin approval process
+- Add transaction history viewing for users
+- Implement 5% platform fee structure for game payouts
+
+FIREBASE CLOUD FUNCTIONS:
+- Deploy 5 critical Cloud Functions for secure transaction processing:
+  - confirmDeposit: Credits user balance after UPI payment
+  - debitWagersForGame: Securely deducts wagers when games start
+  - processGamePayout: Handles winnings distribution and fees
+  - requestWithdrawal: Processes withdrawal requests
+  - processWithdrawal: Admin function to approve/reject withdrawals
+
+SECURITY ENHANCEMENTS:
+- Implement Firestore security rules to prevent direct manipulation of balances
+- Add transaction verification in cloud functions
+- Create admin-only functions with role-based security
+
+UI/UX IMPROVEMENTS:
+- Add wallet page with deposit and withdrawal forms
+- Create transaction history view
+- Implement admin dashboard for managing withdrawals
+- Add balance display in navigation
+
+DOCUMENTATION:
+- Update README with new features and deployment information
+- Add inline documentation for transaction flows
+
+This commit prepares the application for future payment gateway integration with Cashfree while providing a functional MVP for real money transactions. 
