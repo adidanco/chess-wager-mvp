@@ -1,6 +1,6 @@
 # Chess Wager MVP - TypeScript Version
 
-This is the stable TypeScript branch of the Chess Wager MVP project. This branch contains the TypeScript implementation with enhanced type safety and developer experience.
+This is the stable TypeScript branch of the Chess Wager MVP project. This branch contains the TypeScript implementation with enhanced type safety, real money transactions, player ratings, and comprehensive admin capabilities.
 
 ## Branch Information
 
@@ -9,19 +9,49 @@ This is the stable TypeScript branch of the Chess Wager MVP project. This branch
 
 ## Project Overview
 
-Chess Wager is a platform where users can play chess with wagers. Key features include:
-- User authentication
-- Balance management and wagers
-- Real-time chess gameplay
-- Time controls
-- TypeScript type safety
+Chess Wager is a platform where users can play chess with real or virtual wagers. Key features include:
 
-## TypeScript Benefits
+- User authentication with email verification and OTP
+- Real money balance management and secure transactions
+- Glicko-2 rating system for skill-based matchmaking
+- Real-time chess gameplay with standard rules
+- Secure wagering and payout systems
+- Administrative dashboard for transaction management
+- Comprehensive user profiles and statistics
 
-- **Type Safety**: Catch errors at compile time rather than runtime
-- **Better Developer Experience**: Improved autocomplete and IntelliSense
-- **Self-Documenting Code**: Types serve as documentation
-- **Easier Refactoring**: TypeScript makes large-scale changes safer
+## Recent Updates
+
+- **Real Money Transactions**: Implemented deposit and withdrawal flows using UPI for Indian users
+- **Glicko-2 Rating System**: Added sophisticated player rating system for fair matchmaking
+- **Firebase Cloud Functions**: Implemented secure backend processes for handling transactions
+- **Admin Dashboard**: Added comprehensive admin tools for managing withdrawals and user data
+- **Enhanced Security**: Implemented Firestore security rules to protect financial transactions
+- **User Stats**: Added detailed player statistics and rating history
+
+## Deployment
+
+The application is deployed to Firebase Hosting. The current live version can be accessed at:
+[https://chess-wager-mvp.web.app](https://chess-wager-mvp.web.app)
+
+## Technical Features
+
+### Rating System
+- Implemented Glicko-2 rating algorithm
+- Rating history tracking
+- Performance-based matchmaking
+
+### Transaction System
+- Secure deposit and withdrawal using UPI
+- Transaction logs and history
+- Admin approval system for withdrawals
+- Platform fee structure for monetization
+
+### Firebase Features
+- Firestore for data storage
+- Cloud Functions for secure transaction processing
+- Authentication with email verification
+- Hosting for frontend deployment
+- Security rules for data protection
 
 ## Development Setup
 
@@ -45,22 +75,23 @@ Chess Wager is a platform where users can play chess with wagers. Key features i
    npm run build
    ```
 
+5. **Deploy to Firebase**:
+   ```
+   firebase deploy
+   ```
+
 ## Branch Organization
 
 - `stable-typescript` (this branch): Stable TypeScript version with enhanced type safety
 - `stable-javascript`: Original JavaScript version for reference
 - `main`: Default branch (TypeScript version)
 
-## Switching to JavaScript
+## Future Plans
 
-If you need to reference the JavaScript version of this project, checkout the `stable-javascript` branch:
-```
-git checkout stable-javascript
-```
-
-## Deployment
-
-The application is deployed to Firebase Hosting. This branch (`stable-typescript`) is used for production deployments.
+- **Payment Gateway Integration**: Plans to integrate Cashfree for seamless deposits and withdrawals
+- **Enhanced Analytics**: Improved user and game statistics
+- **Tournament Structure**: Support for tournament play with prize pools
+- **Mobile Application**: Development of mobile versions for iOS and Android
 
 ## Contributing
 
@@ -70,3 +101,4 @@ When contributing to this project, please consider the following:
 2. Add appropriate type definitions for new features
 3. Run type checking before submitting changes
 4. Update tests when modifying existing functionality
+5. Follow security best practices for financial features

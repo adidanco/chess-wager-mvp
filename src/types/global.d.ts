@@ -38,6 +38,11 @@ declare module 'chessTypes' {
       toDate: () => Date;
     } | any;
     endTime?: any;
+    useRealMoney?: boolean; // Whether this game uses real money or game currency
+    wagersDebited?: boolean; // Whether wagers have been debited from players
+    payoutProcessed?: boolean; // Whether game payout has been processed
+    wagerDebitTimestamp?: any; // When wagers were debited
+    payoutTimestamp?: any; // When payout was processed
   }
 
   // User related types
@@ -47,6 +52,8 @@ declare module 'chessTypes' {
     email?: string;
     username?: string;
     balance?: number;
+    realMoneyBalance?: number; // Added for real money
+    pendingWithdrawalAmount?: number; // Added for tracking withdrawal requests
     photoURL?: string;
     stats?: UserStats;
     eloRating?: number;
@@ -63,6 +70,8 @@ declare module 'chessTypes' {
     emailVerified?: boolean;
     otpVerified?: boolean;
     lastOtpSent?: any;
+    withdrawalUpiId?: string; // Added for storing user's preferred UPI ID
+    role?: 'user' | 'admin' | 'super_admin'; // User role for permissions
   }
 
   // Stats related types
@@ -92,6 +101,8 @@ declare module 'chessTypes' {
     profileLoading: boolean;
     isAuthenticated: boolean;
     balance: number;
+    realMoneyBalance?: number; // Added for real money
+    pendingWithdrawalAmount?: number; // Added for tracking withdrawals
     username: string;
     stats: UserStats;
     updateProfile: (updates: Partial<UserProfile>) => Promise<boolean>;
@@ -100,4 +111,39 @@ declare module 'chessTypes' {
     balanceUpdating: boolean;
     emailVerified: boolean;
   }
+
+  // Transaction related types
+  export interface Transaction {
+    id?: string;
+    userId: string;
+    type: TransactionType;
+    amount: number;
+    status: TransactionStatus;
+    timestamp: any; // Firestore Timestamp
+    relatedGameId?: string;
+    upiTransactionId?: string;
+    withdrawalDetails?: {
+      upiId: string;
+      username?: string;
+      email?: string;
+      processedAt?: any; // Timestamp when manually processed
+      processedBy?: string; // Admin who processed it
+    };
+    notes?: string;
+  }
+
+  export type TransactionType = 
+    | 'deposit' 
+    | 'withdrawal_request' 
+    | 'withdrawal_complete' 
+    | 'wager_debit' 
+    | 'wager_payout' 
+    | 'platform_fee' 
+    | 'wager_refund';
+
+  export type TransactionStatus = 
+    | 'pending' 
+    | 'completed' 
+    | 'failed' 
+    | 'cancelled';
 } 

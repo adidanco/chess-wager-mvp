@@ -8,6 +8,7 @@ import toast from "react-hot-toast";
 import { logger } from "../utils/logger";
 import { useAuth } from "../context/AuthContext";
 import { GameData } from "chessTypes";
+import { setGameWagerType } from "../services/wagerService";
 
 /**
  * Interface for the values returned by the useCreateGame hook
@@ -20,6 +21,8 @@ interface CreateGameHook {
   isCreating: boolean;
   userBalance: number;
   isLoading: boolean;
+  useRealMoney: boolean;
+  setUseRealMoney: (useRealMoney: boolean) => void;
   handleCreateGame: (e: FormEvent) => Promise<void>;
   cancelCreation: () => void;
 }
@@ -32,9 +35,17 @@ const useCreateGame = (): CreateGameHook => {
   const [timeOption, setTimeOption] = useState<TimeOption>("FIVE_MIN");
   const [isCreating, setIsCreating] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [useRealMoney, setUseRealMoney] = useState<boolean>(false);
   
   const navigate = useNavigate();
-  const { currentUser, balance, updateBalance, isAuthenticated } = useAuth();
+  const { 
+    currentUser, 
+    balance, 
+    realMoneyBalance,
+    updateBalance,
+    updateProfile,
+    isAuthenticated 
+  } = useAuth();
 
   // Check authentication
   useEffect(() => {
@@ -63,9 +74,10 @@ const useCreateGame = (): CreateGameHook => {
       return;
     }
     
-    // Check balance
-    if (wagerAmount > balance) {
-      toast.error("Insufficient balance!");
+    // Check balance based on wager type
+    const availableBalance = useRealMoney ? realMoneyBalance : balance;
+    if (wagerAmount > (availableBalance || 0)) {
+      toast.error(`Insufficient ${useRealMoney ? 'real money' : 'game currency'} balance!`);
       return;
     }
     
@@ -75,7 +87,8 @@ const useCreateGame = (): CreateGameHook => {
       logger.info('useCreateGame', 'Creating new game', { 
         userId: currentUser.uid,
         wager: wagerAmount,
-        timeControl: timeOption
+        timeControl: timeOption,
+        useRealMoney
       });
       
       // Initialize a new chess instance for the initial FEN
@@ -89,6 +102,8 @@ const useCreateGame = (): CreateGameHook => {
       const newGame: Partial<GameData> = {
         whitePlayer: currentUser.uid,
         blackPlayer: null,
+        player1Id: currentUser.uid, // Game creator ID
+        player2Id: undefined, // Will be set when someone joins
         wager: wagerAmount,
         status: GAME_STATUS.WAITING,
         createdAt: serverTimestamp(),
@@ -97,7 +112,10 @@ const useCreateGame = (): CreateGameHook => {
         whiteTime: timeControl,
         blackTime: timeControl,
         timeControl: timeControl,
-        moveHistory: []
+        moveHistory: [],
+        useRealMoney, // Add flag for real money games
+        wagersDebited: false, // Will be set to true when wagers are debited
+        payoutProcessed: false // Will be set to true when payout is processed
       };
       
       const gameRef = await addDoc(collection(db, "games"), newGame);
@@ -105,11 +123,19 @@ const useCreateGame = (): CreateGameHook => {
       logger.info('useCreateGame', 'Game created successfully', { 
         gameId: gameRef.id,
         userId: currentUser.uid,
-        timeControl: timeOption
+        timeControl: timeOption,
+        useRealMoney
       });
       
-      // Deduct wager from user's balance
-      await updateBalance(-wagerAmount, "game creation");
+      // Set the game's wager type (real money or game currency)
+      await setGameWagerType(gameRef.id, useRealMoney);
+      
+      // For game currency, we'll deduct the amount immediately
+      // For real money, this will be handled when the game starts
+      if (!useRealMoney) {
+        // Deduct wager from user's balance
+        await updateBalance(-wagerAmount, "game creation");
+      }
       
       toast.success("Game created! Waiting for opponent...");
       navigate(`/game/${gameRef.id}`);
@@ -141,6 +167,8 @@ const useCreateGame = (): CreateGameHook => {
     isCreating,
     userBalance: balance,
     isLoading,
+    useRealMoney,
+    setUseRealMoney,
     handleCreateGame,
     cancelCreation
   };

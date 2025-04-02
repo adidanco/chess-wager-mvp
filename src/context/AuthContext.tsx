@@ -16,7 +16,8 @@ import { logger } from '../utils/logger'
 import toast from 'react-hot-toast'
 import { UserProfile, UserStats, AuthContextType } from 'chessTypes'
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined)
+// Create the auth context
+export const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function useAuth(): AuthContextType {
   const context = useContext(AuthContext)
@@ -228,6 +229,8 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
     // Computed properties for convenience
     isAuthenticated: !!currentUser,
     balance: userProfile?.balance || 0,
+    realMoneyBalance: userProfile?.realMoneyBalance || 0,
+    pendingWithdrawalAmount: userProfile?.pendingWithdrawalAmount || 0,
     username: userProfile?.username || 'User',
     // Stats (if available in user profile)
     stats: userProfile?.stats || { wins: 0, losses: 0, draws: 0, eloRating: 1200 },

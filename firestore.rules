@@ -1,0 +1,38 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId} {
+      // Allow read if authenticated and the user id matches the document id
+      allow read: if request.auth != null && request.auth.uid == userId;
+      // Allow create if authenticated and creating their own document
+      allow create: if request.auth != null && request.auth.uid == userId;
+      // Allow update if authenticated and updating their own document
+      // BUT don't allow direct updates to balance, realMoneyBalance or pendingWithdrawalAmount
+      allow update: if request.auth != null && 
+                      request.auth.uid == userId &&
+                      !('realMoneyBalance' in request.resource.data) &&
+                      !('pendingWithdrawalAmount' in request.resource.data) &&
+                      !('balance' in request.resource.data);
+      // For special functions that need to update balance, use Custom Claims or Cloud Functions
+    }
+    
+    match /games/{gameId} {
+      // Allow read if authenticated
+      allow read: if request.auth != null;
+      // Allow create if authenticated
+      allow create: if request.auth != null;
+      // Allow update if authenticated and either the game creator or the game joiner
+      allow update: if request.auth != null && 
+                    (resource.data.player1Id == request.auth.uid || 
+                     resource.data.player2Id == request.auth.uid);
+    }
+    
+    match /transactions/{transactionId} {
+      // Allow read if authenticated and the transaction belongs to the user
+      allow read: if request.auth != null && 
+                  resource.data.userId == request.auth.uid;
+      // Disallow direct client writes - all transaction writes must go through Cloud Functions
+      allow write: if false;
+    }
+  }
+} 

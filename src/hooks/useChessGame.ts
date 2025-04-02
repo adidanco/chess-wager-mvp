@@ -20,6 +20,7 @@ import useChessClock from "./useChessClock";
 import { NavigateFunction } from "react-router-dom";
 import { GameData } from "chessTypes";
 import { updateRatingsAfterGame } from "../services/ratingService";
+import { processGameEnd } from "../services/wagerService";
 
 // Type for move function result from chess.js
 interface ChessMoveResult {
@@ -150,22 +151,43 @@ const useChessGame = (
       
       await updateDoc(gameRef, updateData);
 
-      // Handle wager distribution (Only if winner is not 'draw')
+      // Handle wager distribution and ratings update
       if (winner && currentData.whitePlayer && currentData.blackPlayer) {
          const winnerId = (winner === PLAYER_COLORS.WHITE) ? currentData.whitePlayer : currentData.blackPlayer;
-         const loserId = (winner === PLAYER_COLORS.WHITE) ? currentData.blackPlayer : currentData.whitePlayer; // Need loser ID for stats potentially later
+         const loserId = (winner === PLAYER_COLORS.WHITE) ? currentData.blackPlayer : currentData.whitePlayer;
          
-         // Ensure winnerId and loserId are valid before proceeding
+         // Process game end and handle payouts
          const wager = currentData.wager || 0;
-         if (winnerId && loserId && wager > 0) { // Added wager check
-            const winnerRef = doc(db, "users", winnerId);
-             try {
-                 // Use increment for balance updates
-                 await updateDoc(winnerRef, { balance: increment(wager * 2) });
-                 logger.info('useChessGame', 'Payout successful on time up', { winnerId, amount: wager * 2 });
-             } catch (err) {
-                 logger.error('useChessGame', 'Error updating winner balance on time up', { err, winnerId });
-             }
+         if (winnerId && loserId && wager > 0) {
+            try {
+              // Process wager payout based on game result
+              const payoutResult = await processGameEnd(
+                gameId,
+                winnerId,  // Winner ID
+                loserId,   // Loser ID
+                false,     // Not a draw
+                wager,     // Wager amount
+                currentData.useRealMoney || false // Use real money if specified
+              );
+              
+              if (payoutResult) {
+                logger.info('useChessGame', 'Payout processed successfully on time up', { 
+                  gameId, 
+                  winnerId, 
+                  amount: wager,
+                  useRealMoney: currentData.useRealMoney
+                });
+              } else {
+                logger.error('useChessGame', 'Failed to process payout on time up', { 
+                  gameId, 
+                  winnerId,
+                  loserId,
+                  amount: wager
+                });
+              }
+            } catch (err) {
+              logger.error('useChessGame', 'Error processing payout on time up', { err, gameId, winnerId });
+            }
              
             // Update player ratings
             try {
@@ -315,86 +337,100 @@ const useChessGame = (
       await updateDoc(gameRef, updateData);
       logger.info('useChessGame', 'Move successful, updated Firestore', { gameId, newTurn });
 
-        // Handle payouts if game ended (only update state, payout handled by snapshot? No, do it here)
-         if (gameEnded) {
-            // setIsGameOver({ winner }); // Let snapshot handle this state
+      // Process end of game if needed
+      if (gameEnded) {
+        if (currentData.whitePlayer && currentData.blackPlayer) {
+          // Get player IDs
+          const whitePlayerId = currentData.whitePlayer;
+          const blackPlayerId = currentData.blackPlayer;
+          const wager = currentData.wager || 0;
 
-            // Payout logic - for draw
+          // Handle ratings update
+          try {
             if (isDraw) {
-                 const wager = currentData.wager || 0;
-                 if (wager > 0 && currentData.whitePlayer && currentData.blackPlayer) {
-                     const whiteUserRef = doc(db, "users", currentData.whitePlayer);
-                     const blackUserRef = doc(db, "users", currentData.blackPlayer);
-                     await updateDoc(whiteUserRef, { balance: increment(wager) });
-                     await updateDoc(blackUserRef, { balance: increment(wager) });
-                     toast.success("Game ended in a draw!");
-                     
-                     // Update ratings for a draw
-                     if (currentData.whitePlayer && currentData.blackPlayer) {
-                       try {
-                         await updateRatingsAfterGame(
-                           gameId,
-                           currentData.whitePlayer,
-                           currentData.blackPlayer,
-                           'draw'
-                         );
-                         logger.info('useChessGame', 'Ratings updated for draw', { gameId });
-                       } catch (error) {
-                         logger.error('useChessGame', 'Failed to update ratings for draw', { error, gameId });
-                       }
-                     }
-                 }
-            } else if (isCheckmate && currentData.currentTurn) { 
-              // Checkmate - winner is the current player
-                 const wager = currentData.wager || 0;
-                 if (wager > 0) {
-                     const winnerId = (currentData.currentTurn === PLAYER_COLORS.WHITE) 
-                        ? currentData.whitePlayer 
-                        : currentData.blackPlayer;
-                     
-                     if (winnerId) {
-                        const userRef = doc(db, "users", winnerId);
-                        await updateDoc(userRef, { balance: increment(wager * 2) });
-                     }
-                     
-                     const userPlayerColor = userId === currentData.whitePlayer 
-                        ? PLAYER_COLORS.WHITE 
-                        : PLAYER_COLORS.BLACK;
-                        
-                     toast.success(currentData.currentTurn === userPlayerColor 
-                        ? "Checkmate! You won!" 
-                        : "Checkmate! You lost!");
-                     
-                     // Update ratings for a win/loss
-                     if (currentData.whitePlayer && currentData.blackPlayer) {
-                       try {
-                         // If white won, it's a 'win' from white's perspective
-                         // If black won, it's a 'loss' from white's perspective
-                         const resultFromWhitePerspective = 
-                           currentData.currentTurn === PLAYER_COLORS.WHITE ? 'win' : 'loss';
-                           
-                         await updateRatingsAfterGame(
-                           gameId,
-                           currentData.whitePlayer,
-                           currentData.blackPlayer,
-                           resultFromWhitePerspective
-                         );
-                         logger.info('useChessGame', 'Ratings updated for checkmate', { 
-                           gameId,
-                           winner: currentData.currentTurn 
-                         });
-                       } catch (error) {
-                         logger.error('useChessGame', 'Failed to update ratings for checkmate', { 
-                           error,
-                           gameId 
-                         });
-                       }
-                     }
-                 }
+              await updateRatingsAfterGame(gameId, whitePlayerId, blackPlayerId, 'draw');
+            } else if (isCheckmate) {
+              const resultFromWhitePerspective = 
+                winner === PLAYER_COLORS.WHITE ? 'win' : 'loss';
+              
+              await updateRatingsAfterGame(
+                gameId,
+                whitePlayerId,
+                blackPlayerId,
+                resultFromWhitePerspective
+              );
             }
-         }
+            logger.info('useChessGame', 'Ratings updated for game end', { 
+              gameId, 
+              isDraw, 
+              isCheckmate,
+              winner
+            });
+          } catch (error) {
+            logger.error('useChessGame', 'Error updating ratings', { error, gameId });
+          }
 
-        return true; // Indicate move was successful
+          // Handle wager payouts if there is a wager
+          if (wager > 0) {
+            try {
+              // Determine winner and loser IDs for payout
+              let winnerId: string | null = null;
+              let loserId: string | null = null;
+              
+              if (isCheckmate) {
+                winnerId = winner === PLAYER_COLORS.WHITE ? whitePlayerId : blackPlayerId;
+                loserId = winner === PLAYER_COLORS.WHITE ? blackPlayerId : whitePlayerId;
+              }
+              
+              // Process wager payout based on game result
+              const payoutResult = await processGameEnd(
+                gameId,
+                winnerId,     // Winner ID or null for draw
+                loserId,      // Loser ID or null for draw
+                isDraw,       // Is this a draw?
+                wager,        // Wager amount
+                currentData.useRealMoney || false // Use real money if specified
+              );
+              
+              if (payoutResult) {
+                logger.info('useChessGame', 'Payout processed successfully', { 
+                  gameId, 
+                  isDraw, 
+                  winnerId, 
+                  amount: wager,
+                  useRealMoney: currentData.useRealMoney
+                });
+              } else {
+                logger.error('useChessGame', 'Failed to process payout', { 
+                  gameId, 
+                  isDraw, 
+                  winnerId,
+                  loserId
+                });
+              }
+            } catch (error) {
+              logger.error('useChessGame', 'Error processing payout', { error, gameId });
+            }
+          }
+        }
+
+        // Display appropriate toast message
+        if (isCheckmate) {
+          toast.success(`Checkmate! ${finishingSide === PLAYER_COLORS.WHITE ? 'White' : 'Black'} wins!`);
+        } else if (isDraw) {
+          toast(`Game ended in a draw!`);
+        }
+        
+        setIsGameOver({ winner });
+        return true; // Return true for successful move
+      }
+
+      // Continue playing - game didn't end
+      if (newTurn) {
+        startClock(newTurn);
+      }
+      
+      return true; // Move successful
 
     } catch (error) {
         logger.error('useChessGame', 'Error making move', { error, gameId });
