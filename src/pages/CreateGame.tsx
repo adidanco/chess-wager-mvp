@@ -13,8 +13,6 @@ export default function CreateGame(): JSX.Element {
     isCreating,
     userBalance,
     isLoading,
-    useRealMoney,
-    setUseRealMoney,
     handleCreateGame,
     cancelCreation
   } = useCreateGame();
@@ -34,8 +32,6 @@ export default function CreateGame(): JSX.Element {
         isSubmitting={isCreating}
         onSubmit={handleCreateGame}
         onCancel={cancelCreation}
-        useRealMoney={useRealMoney}
-        setUseRealMoney={setUseRealMoney}
       />
     </PageLayout>
   );

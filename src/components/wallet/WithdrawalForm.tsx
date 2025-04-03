@@ -7,7 +7,7 @@ import { toast } from 'react-hot-toast';
 const WITHDRAWAL_AMOUNTS = [100, 200, 500, 1000, 2000, 5000];
 
 export const WithdrawalForm: React.FC = () => {
-  const { realMoneyBalance, pendingWithdrawalAmount, userProfile } = useAuth();
+  const { balance, withdrawableBalance, pendingWithdrawalAmount, userProfile } = useAuth();
   const [amount, setAmount] = useState<number>(0);
   const [customAmount, setCustomAmount] = useState<string>('');
   const [upiId, setUpiId] = useState<string>(userProfile?.withdrawalUpiId || '');
@@ -65,9 +65,9 @@ export const WithdrawalForm: React.FC = () => {
       return;
     }
     
-    // Check if user has enough balance
-    if (amount > (realMoneyBalance || 0)) {
-      setError('Insufficient balance');
+    // Check if user has enough withdrawable balance
+    if (amount > withdrawableBalance) {
+      setError('Insufficient withdrawable balance');
       return;
     }
     
@@ -102,7 +102,13 @@ export const WithdrawalForm: React.FC = () => {
       
       <Box sx={{ mb: 3 }}>
         <Typography variant="subtitle1" gutterBottom>
-          Available Balance: ₹{realMoneyBalance || 0}
+          Total Balance: ₹{balance || 0}
+        </Typography>
+        <Typography variant="subtitle1" gutterBottom sx={{ color: 'success.main', fontWeight: 'bold' }}>
+          Withdrawable Balance: ₹{withdrawableBalance || 0}
+        </Typography>
+        <Typography variant="body2" sx={{ mt: 1, mb: 2, color: 'text.secondary' }}>
+          You can only withdraw money that you've won in games. Deposits and initial balance cannot be withdrawn.
         </Typography>
         {(pendingWithdrawalAmount || 0) > 0 && (
           <Typography variant="subtitle2" color="text.secondary">
@@ -122,7 +128,7 @@ export const WithdrawalForm: React.FC = () => {
               variant={amount === value ? "contained" : "outlined"}
               onClick={() => handleAmountSelect(value)}
               sx={{ minWidth: '80px', flexGrow: 1 }}
-              disabled={value > (realMoneyBalance || 0)}
+              disabled={value > withdrawableBalance}
             >
               ₹{value}
             </Button>
@@ -170,7 +176,7 @@ export const WithdrawalForm: React.FC = () => {
         fullWidth
         size="large"
         onClick={handleWithdrawalRequest}
-        disabled={loading || success || amount <= 0 || amount > (realMoneyBalance || 0)}
+        disabled={loading || success || amount <= 0 || amount > withdrawableBalance}
       >
         {loading ? <CircularProgress size={24} /> : 'Request Withdrawal'}
       </Button>

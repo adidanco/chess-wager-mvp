@@ -45,7 +45,7 @@ const TabPanel = (props: TabPanelProps) => {
 // Wallet Page Component
 const Wallet: React.FC = () => {
   const navigate = useNavigate();
-  const { isAuthenticated, realMoneyBalance, pendingWithdrawalAmount } = useAuth();
+  const { isAuthenticated, balance, withdrawableBalance, pendingWithdrawalAmount } = useAuth();
   const [tabValue, setTabValue] = useState<number>(0);
 
   // Handle tab change
@@ -69,7 +69,10 @@ const Wallet: React.FC = () => {
         <Paper elevation={3} sx={{ mb: 3, p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Box>
             <Typography variant="h6" gutterBottom>
-              Total Balance: ₹{realMoneyBalance || 0}
+              Total Balance: ₹{balance || 0}
+            </Typography>
+            <Typography variant="subtitle1" sx={{ color: 'success.main' }}>
+              Withdrawable: ₹{withdrawableBalance || 0}
             </Typography>
             {(pendingWithdrawalAmount || 0) > 0 && (
               <Typography variant="body2" color="text.secondary">
@@ -80,9 +83,9 @@ const Wallet: React.FC = () => {
           <Button 
             variant="contained"
             color="primary"
-            onClick={() => navigate('/create-game')}
+            onClick={() => navigate('/')}
           >
-            Play a Game
+            Home
           </Button>
         </Paper>
         

@@ -229,7 +229,7 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
     // Computed properties for convenience
     isAuthenticated: !!currentUser,
     balance: userProfile?.balance || 0,
-    realMoneyBalance: userProfile?.realMoneyBalance || 0,
+    withdrawableBalance: userProfile?.withdrawableBalance || 0,
     pendingWithdrawalAmount: userProfile?.pendingWithdrawalAmount || 0,
     username: userProfile?.username || 'User',
     // Stats (if available in user profile)

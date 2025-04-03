@@ -166,8 +166,7 @@ const useChessGame = (
                 winnerId,  // Winner ID
                 loserId,   // Loser ID
                 false,     // Not a draw
-                wager,     // Wager amount
-                currentData.useRealMoney || false // Use real money if specified
+                wager      // Wager amount
               );
               
               if (payoutResult) {
@@ -388,8 +387,7 @@ const useChessGame = (
                 winnerId,     // Winner ID or null for draw
                 loserId,      // Loser ID or null for draw
                 isDraw,       // Is this a draw?
-                wager,        // Wager amount
-                currentData.useRealMoney || false // Use real money if specified
+                wager         // Wager amount
               );
               
               if (payoutResult) {

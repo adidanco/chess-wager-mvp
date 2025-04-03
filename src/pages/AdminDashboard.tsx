@@ -292,7 +292,7 @@ const AdminDashboard: React.FC = () => {
       
       // Refund the user's balance and clear pending withdrawal
       await updateDoc(userRef, {
-        realMoneyBalance: (userProfile?.realMoneyBalance || 0) + selectedWithdrawal.amount,
+        withdrawableBalance: (userProfile?.withdrawableBalance || 0) + selectedWithdrawal.amount,
         pendingWithdrawalAmount: 0,
         updatedAt: serverTimestamp()
       });
@@ -545,7 +545,7 @@ const AdminDashboard: React.FC = () => {
                         <TableCell>{user.username || 'Unknown'}</TableCell>
                         <TableCell>{user.email || 'No email'}</TableCell>
                         <TableCell>{user.balance || 0}</TableCell>
-                        <TableCell>₹{user.realMoneyBalance || 0}</TableCell>
+                        <TableCell>₹{user.withdrawableBalance || 0}</TableCell>
                         <TableCell>
                           {user.pendingWithdrawalAmount ? `₹${user.pendingWithdrawalAmount}` : '-'}
                         </TableCell>

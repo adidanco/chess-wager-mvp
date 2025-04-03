@@ -23,7 +23,7 @@ const navItems: NavItem[] = [
 const Navigation: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAuthenticated, realMoneyBalance, logout } = useAuth();
+  const { isAuthenticated, balance, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
 
   // Handle navigation to a path
@@ -63,7 +63,7 @@ const Navigation: React.FC = () => {
           <div className="hidden md:flex items-center space-x-6">
             {isAuthenticated && (
               <div className="mr-4 py-1 px-3 bg-blue-50 rounded-full text-blue-700 font-medium">
-                ₹{realMoneyBalance || 0}
+                ₹{balance || 0}
               </div>
             )}
             
@@ -107,7 +107,7 @@ const Navigation: React.FC = () => {
           <div className="md:hidden mt-3 pb-2 space-y-2">
             {isAuthenticated && (
               <div className="px-4 py-2 bg-blue-50 rounded-md text-blue-700 font-medium mb-2">
-                Balance: ₹{realMoneyBalance || 0}
+                Balance: ₹{balance || 0}
               </div>
             )}
             

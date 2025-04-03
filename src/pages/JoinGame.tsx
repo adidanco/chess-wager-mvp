@@ -147,6 +147,7 @@ export default function JoinGame(): JSX.Element {
       // Update game document
       await updateDoc(gameRef, {
         blackPlayer: currentUser.uid,
+        player2Id: currentUser.uid,
         status: GAME_STATUS.IN_PROGRESS,
         whiteTime: gameData.timeControl,
         blackTime: gameData.timeControl,

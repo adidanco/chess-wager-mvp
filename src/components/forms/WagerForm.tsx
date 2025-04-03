@@ -17,8 +17,6 @@ interface WagerFormProps {
   cancelLabel?: string;
   timeOption: TimeOption;
   setTimeOption: (option: TimeOption) => void;
-  useRealMoney?: boolean;
-  setUseRealMoney?: (useRealMoney: boolean) => void;
 }
 
 /**
@@ -36,17 +34,11 @@ const WagerForm = ({
   cancelLabel = "Cancel",
   timeOption,
   setTimeOption,
-  useRealMoney = false,
-  setUseRealMoney = () => {},
 }: WagerFormProps): JSX.Element => {
   const [sliderValue, setSliderValue] = useState<number>(parseInt(wager) || 10);
-  const { realMoneyBalance } = useAuth();
   
   // Quick amount buttons
   const quickAmounts = [10, 50, 100, 500];
-  
-  // Effective balance based on whether using real money or game currency
-  const effectiveBalance = useRealMoney ? (realMoneyBalance || 0) : userBalance;
   
   // Handle slider change
   const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -69,44 +61,11 @@ const WagerForm = ({
     }
   }, [wager]);
   
-  // Toggle between real money and game currency
-  const toggleWagerType = () => {
-    setUseRealMoney(!useRealMoney);
-  };
-  
   return (
     <div className="bg-white p-4 sm:p-8 rounded-lg shadow-md w-full max-w-md">
       <h2 className="text-2xl sm:text-3xl font-bold mb-6 sm:mb-8 text-center text-gray-800">Create New Game</h2>
       
       <form onSubmit={onSubmit} className="space-y-6 sm:space-y-8">
-        {/* Wager Type Toggle */}
-        <div className="border-b pb-4">
-          <label className="block text-base sm:text-lg font-semibold text-gray-700 mb-3">
-            Wager Type
-          </label>
-          
-          <div className="flex justify-center">
-            <div className="relative inline-flex items-center cursor-pointer">
-              <input 
-                type="checkbox" 
-                className="sr-only peer" 
-                checked={useRealMoney}
-                onChange={toggleWagerType}
-              />
-              <div className="w-14 h-7 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-blue-600"></div>
-              <span className="ml-3 text-sm font-medium text-gray-900">
-                {useRealMoney ? 'Real Money ₹' : 'Game Currency ' + CURRENCY_SYMBOL}
-              </span>
-            </div>
-          </div>
-          
-          {useRealMoney && (
-            <div className="mt-2 text-center text-sm text-orange-600 bg-orange-50 p-2 rounded-md">
-              You are using real money. Amounts will be deducted from your wallet balance.
-            </div>
-          )}
-        </div>
-        
         {/* Wager Amount Section */}
         <div className="space-y-3 sm:space-y-4">
           <label className="block text-base sm:text-lg font-semibold text-gray-700 mb-2">
@@ -116,7 +75,7 @@ const WagerForm = ({
           {/* Display current wager with currency */}
           <div className="flex items-center justify-center mb-3 sm:mb-4">
             <span className="text-2xl sm:text-3xl font-bold text-green-600">
-              {useRealMoney ? '₹' : CURRENCY_SYMBOL}{sliderValue}
+              {CURRENCY_SYMBOL}{sliderValue}
             </span>
           </div>
           
@@ -131,10 +90,9 @@ const WagerForm = ({
                   sliderValue === amount 
                     ? 'bg-blue-600 text-white' 
                     : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                } ${amount > effectiveBalance ? 'opacity-50 cursor-not-allowed' : ''}`}
-                disabled={amount > effectiveBalance}
+                }`}
               >
-                {useRealMoney ? '₹' : CURRENCY_SYMBOL}{amount}
+                {CURRENCY_SYMBOL}{amount}
               </button>
             ))}
           </div>
@@ -144,7 +102,7 @@ const WagerForm = ({
             <input
               type="range"
               min="1"
-              max={Math.max(effectiveBalance, 1000)}
+              max={Math.max(userBalance, 1000)}
               value={sliderValue}
               onChange={handleSliderChange}
               className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
@@ -153,8 +111,8 @@ const WagerForm = ({
             
             {/* Min/Max labels */}
             <div className="flex justify-between text-xs text-gray-500">
-              <span>{useRealMoney ? '₹' : CURRENCY_SYMBOL}1</span>
-              <span>{useRealMoney ? '₹' : CURRENCY_SYMBOL}{Math.max(effectiveBalance, 1000)}</span>
+              <span>₹1</span>
+              <span>₹{Math.max(userBalance, 1000)}</span>
             </div>
             
             {/* Manual input */}
@@ -166,16 +124,15 @@ const WagerForm = ({
                 className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-center font-medium"
                 placeholder="Enter wager amount"
                 min="1"
-                max={effectiveBalance}
+                max={userBalance}
                 required
               />
             </div>
           </div>
           
-          {effectiveBalance !== null && (
+          {userBalance !== null && (
             <p className="mt-2 text-sm text-gray-500 flex items-center justify-center">
-              <span className="mr-1">💰</span> Your balance: 
-              {useRealMoney ? ' ₹' + (realMoneyBalance || 0).toFixed(2) : ' ' + CURRENCY_SYMBOL + userBalance.toFixed(2)}
+              <span className="mr-1">💰</span> Your balance: ₹{userBalance.toFixed(2)}
             </p>
           )}
         </div>
@@ -219,9 +176,9 @@ const WagerForm = ({
         <div className="space-y-3 pt-2 sm:pt-4">
           <button
             type="submit"
-            disabled={isSubmitting || parseInt(wager) > effectiveBalance}
+            disabled={isSubmitting || parseInt(wager) > userBalance}
             className={`w-full py-3 px-4 rounded-md text-white font-medium text-base sm:text-lg transition-colors min-h-[44px] ${
-              isSubmitting || parseInt(wager) > effectiveBalance
+              isSubmitting || parseInt(wager) > userBalance
                 ? "bg-gray-400 cursor-not-allowed"
                 : "bg-blue-600 hover:bg-blue-700 shadow-md"
             }`}

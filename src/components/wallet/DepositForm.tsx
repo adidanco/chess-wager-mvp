@@ -8,7 +8,7 @@ import { toast } from 'react-hot-toast';
 const DEPOSIT_AMOUNTS = [100, 200, 500, 1000, 2000, 5000];
 
 export const DepositForm: React.FC = () => {
-  const { realMoneyBalance } = useAuth();
+  const { balance } = useAuth();
   const [amount, setAmount] = useState<number>(0);
   const [customAmount, setCustomAmount] = useState<string>('');
   const [upiTransactionId, setUpiTransactionId] = useState<string>('');
@@ -95,7 +95,7 @@ export const DepositForm: React.FC = () => {
       </Typography>
       
       <Typography variant="subtitle1" gutterBottom>
-        Current Balance: ₹{realMoneyBalance || 0}
+        Current Balance: ₹{balance || 0}
       </Typography>
       
       {paymentStep === 'select' ? (

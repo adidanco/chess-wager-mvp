@@ -1,5 +1,6 @@
 import React, { ReactNode } from "react";
 import Navigation from "./Navigation";
+import Footer from "./Footer";
 import { Box, Container } from "@mui/material";
 
 /**
@@ -37,6 +38,7 @@ const PageLayout = ({
           )}
         </Container>
       </Box>
+      <Footer />
     </div>
   );
 };

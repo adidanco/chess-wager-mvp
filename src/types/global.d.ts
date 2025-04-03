@@ -52,7 +52,7 @@ declare module 'chessTypes' {
     email?: string;
     username?: string;
     balance?: number;
-    realMoneyBalance?: number; // Added for real money
+    withdrawableBalance?: number; // Added for tracking only the amount that can be withdrawn (from winnings)
     pendingWithdrawalAmount?: number; // Added for tracking withdrawal requests
     photoURL?: string;
     stats?: UserStats;
@@ -101,7 +101,7 @@ declare module 'chessTypes' {
     profileLoading: boolean;
     isAuthenticated: boolean;
     balance: number;
-    realMoneyBalance?: number; // Added for real money
+    withdrawableBalance: number; // Amount that can be withdrawn (from winnings)
     pendingWithdrawalAmount?: number; // Added for tracking withdrawals
     username: string;
     stats: UserStats;

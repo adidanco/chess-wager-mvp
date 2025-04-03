@@ -21,6 +21,8 @@ import ForgotPassword from "./pages/ForgotPassword"
 import Wallet from "./pages/Wallet"
 import AdminDashboard from "./pages/AdminDashboard"
 import TestConstants from "./test-constants"
+import TermsAndConditions from "./pages/TermsAndConditions"
+import ContactUs from "./pages/ContactUs"
 
 // Wrap Firestore operations with network check
 const withNetworkCheck = async <T,>(operation: () => Promise<T>): Promise<T> => {
@@ -56,6 +58,8 @@ function App(): JSX.Element {
                 <Route path="/wallet" element={<Wallet />} />
                 <Route path="/admin" element={<AdminDashboard />} />
                 <Route path="/test-constants" element={<TestConstants />} />
+                <Route path="/terms-and-conditions" element={<TermsAndConditions />} />
+                <Route path="/contact-us" element={<ContactUs />} />
               </Routes>
             </div>
           </BrowserRouter>
