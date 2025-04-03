@@ -1,233 +1,339 @@
-import React, { useState } from "react";
-import { toast } from "react-hot-toast";
-import { logger } from "../../utils/logger";
-import { CURRENCY_SYMBOL } from "../../utils/constants";
-import { useAuth } from "../../context/AuthContext";
+import React, { useState, useContext } from 'react';
+import { Box, Button, Typography, Paper, Divider, TextField, Dialog, DialogTitle, DialogContent, DialogActions, Grid, Chip } from '@mui/material';
+import { toast } from 'react-hot-toast';
+import { AuthContext } from '../../context/AuthContext';
+import { logger } from '../../utils/logger';
 
-/**
- * Interface for BalanceDisplay props
- */
-interface BalanceDisplayProps {
-  balance: number;
-}
+const QUICK_AMOUNTS = [25, 50, 100, 500];
+const MIN_DEPOSIT = 25;
+const MIN_WITHDRAW = 25;
 
-/**
- * Component to display user balance, deposit, and withdraw options
- */
-const BalanceDisplay = ({ balance = 0 }: BalanceDisplayProps): JSX.Element => {
-  const [showDepositOptions, setShowDepositOptions] = useState<boolean>(false);
-  const [showWithdrawForm, setShowWithdrawForm] = useState<boolean>(false);
-  const [isProcessing, setIsProcessing] = useState<boolean>(false);
-  const [customAmount, setCustomAmount] = useState<string>("");
-  const [withdrawAmount, setWithdrawAmount] = useState<string>("");
-  const { updateBalance, balanceUpdating } = useAuth();
-  
-  const depositAmounts = [5, 10, 15, 20];
-  
-  // Close all menus
-  const closeAllMenus = () => {
-    setShowDepositOptions(false);
-    setShowWithdrawForm(false);
-    setCustomAmount("");
-    setWithdrawAmount("");
-  };
+const BalanceDisplay: React.FC = () => {
+  // State for the deposit dialog
+  const [isDepositOpen, setIsDepositOpen] = useState(false);
+  const [depositAmount, setDepositAmount] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  const handleDeposit = async (amount: number): Promise<void> => {
-    if (isProcessing || balanceUpdating) return;
-    
-    setIsProcessing(true);
-    try {
-      await updateBalance(amount, "deposit");
-      logger.info('BalanceDisplay', 'Deposit successful', { amount });
-      toast.success(`Successfully deposited ${CURRENCY_SYMBOL}${amount}`);
-      closeAllMenus();
-    } catch (error) {
-      const err = error as Error;
-      logger.error('BalanceDisplay', 'Error processing deposit', { error: err });
-      toast.error(err.message || "Error processing deposit!");
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-  
-  const handleCustomDeposit = async (): Promise<void> => {
-    if (isProcessing || balanceUpdating) return;
-    
-    const amount = parseFloat(customAmount);
-    if (isNaN(amount) || amount <= 0) {
-      toast.error("Please enter a valid amount");
-      return;
-    }
-    
-    await handleDeposit(amount);
-  };
-  
-  const handleWithdraw = async (): Promise<void> => {
-    if (isProcessing || balanceUpdating) return;
-    
-    const amount = parseFloat(withdrawAmount);
-    if (isNaN(amount) || amount <= 0) {
-      toast.error("Please enter a valid amount");
-      return;
-    }
-    
-    // Verify sufficient balance
-    if (amount > balance) {
-      toast.error("Insufficient balance for this withdrawal");
+  // State for the withdrawal dialog
+  const [isWithdrawOpen, setIsWithdrawOpen] = useState(false);
+  const [withdrawAmount, setWithdrawAmount] = useState('');
+  const [upiId, setUpiId] = useState('');
+
+  const { userProfile, currentUser, updateBalance } = useContext(AuthContext) || {};
+
+  const realMoneyBalance = userProfile?.realMoneyBalance || 0;
+  const withdrawableAmount = userProfile?.withdrawableAmount || 0;
+
+  const handleQuickDeposit = async (amount: number) => {
+    if (!currentUser || !updateBalance) {
+      toast.error('You must be logged in to deposit');
       return;
     }
     
     setIsProcessing(true);
+    logger.info('Processing dummy deposit', { amount });
+    
     try {
-      await updateBalance(-amount, "withdraw");
-      logger.info('BalanceDisplay', 'Withdrawal successful', { amount });
-      toast.success(`Successfully withdrew ${CURRENCY_SYMBOL}${amount}`);
-      closeAllMenus();
+      // Call updateBalance without the isWinnings flag since this is a deposit
+      const success = await updateBalance(amount, `Quick deposit of ₹${amount}`);
+      
+      if (success) {
+        toast.success(`Successfully deposited ₹${amount}`);
+        setIsDepositOpen(false);
+        setDepositAmount('');
+      }
     } catch (error) {
-      const err = error as Error;
-      logger.error('BalanceDisplay', 'Error processing withdrawal', { error: err });
-      toast.error(err.message || "Error processing withdrawal!");
+      toast.error('Failed to process deposit');
+      logger.error('Deposit error', { error });
     } finally {
       setIsProcessing(false);
     }
   };
-  
-  // Toggle options menus
-  const toggleDepositOptions = () => {
-    setShowWithdrawForm(false);
-    setShowDepositOptions(!showDepositOptions);
-    setCustomAmount("");
+
+  const handleCustomDeposit = async () => {
+    const amount = Number(depositAmount);
+    
+    if (isNaN(amount) || amount < MIN_DEPOSIT) {
+      toast.error(`Minimum deposit amount is ₹${MIN_DEPOSIT}`);
+      return;
+    }
+    
+    if (!currentUser || !updateBalance) {
+      toast.error('You must be logged in to deposit');
+      return;
+    }
+    
+    setIsProcessing(true);
+    logger.info('Processing custom deposit', { amount });
+    
+    try {
+      // Call updateBalance without the isWinnings flag
+      const success = await updateBalance(amount, `Custom deposit of ₹${amount}`);
+      
+      if (success) {
+        toast.success(`Successfully deposited ₹${amount}`);
+        setIsDepositOpen(false);
+        setDepositAmount('');
+      }
+    } catch (error) {
+      toast.error('Failed to process deposit');
+      logger.error('Custom deposit error', { error });
+    } finally {
+      setIsProcessing(false);
+    }
   };
-  
-  const toggleWithdrawForm = () => {
-    setShowDepositOptions(false);
-    setShowWithdrawForm(!showWithdrawForm);
-    setWithdrawAmount("");
+
+  const handleWithdraw = async () => {
+    const amount = Number(withdrawAmount);
+    
+    if (isNaN(amount) || amount <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+    
+    if (amount < MIN_WITHDRAW) {
+      toast.error(`Minimum withdrawal amount is ₹${MIN_WITHDRAW}`);
+      return;
+    }
+    
+    if (amount > withdrawableAmount) {
+      toast.error('You can only withdraw your winnings');
+      return;
+    }
+    
+    if (!upiId) {
+      toast.error('Please enter your UPI ID');
+      return;
+    }
+    
+    // Validate UPI ID format (basic validation)
+    const upiRegex = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9]+$/;
+    if (!upiRegex.test(upiId)) {
+      toast.error('Please enter a valid UPI ID');
+      return;
+    }
+    
+    if (!currentUser || !updateBalance) {
+      toast.error('You must be logged in to withdraw');
+      return;
+    }
+    
+    setIsProcessing(true);
+    logger.info('Processing dummy withdrawal', { amount, upiId });
+    
+    try {
+      // Call updateBalance with negative amount and isWinnings=true
+      const success = await updateBalance(-amount, `Withdrawal to UPI: ${upiId}`, true);
+      
+      if (success) {
+        toast.success(`Successfully withdrew ₹${amount}`);
+        setIsWithdrawOpen(false);
+        setWithdrawAmount('');
+        setUpiId('');
+      }
+    } catch (error) {
+      toast.error('Failed to process withdrawal');
+      logger.error('Withdrawal error', { error, amount, upiId });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleCloseDeposit = () => {
+    setIsDepositOpen(false);
+    setDepositAmount('');
+  };
+
+  const handleCloseWithdraw = () => {
+    setIsWithdrawOpen(false);
+    setWithdrawAmount('');
+    setUpiId('');
   };
 
   return (
-    <div className="mb-8">
-      <h3 className="text-lg font-semibold mb-2">Balance</h3>
-      <div className="text-2xl text-green-600 font-bold mb-3">
-        {CURRENCY_SYMBOL}{balance.toFixed(2)}
-      </div>
-      
-      <div className="flex space-x-2 mb-2">
-        <button
-          onClick={toggleDepositOptions}
-          disabled={isProcessing || balanceUpdating}
-          className={`flex-1 ${
-            isProcessing || balanceUpdating
-              ? "bg-gray-400 cursor-not-allowed"
-              : "bg-green-500 hover:bg-green-600"
-          } text-white py-2 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 min-h-[44px]`}
-        >
-          {isProcessing && showDepositOptions ? "Processing..." : "Deposit"}
-        </button>
+    <>
+      <Paper elevation={3} sx={{ p: 2, mb: 3 }}>
+        <Typography variant="h6" gutterBottom align="center">
+          Your Balance
+        </Typography>
         
-        <button
-          onClick={toggleWithdrawForm}
-          disabled={isProcessing || balanceUpdating || balance <= 0}
-          className={`flex-1 ${
-            isProcessing || balanceUpdating || balance <= 0
-              ? "bg-gray-400 cursor-not-allowed"
-              : "bg-red-500 hover:bg-red-600"
-          } text-white py-2 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 min-h-[44px]`}
-        >
-          {isProcessing && showWithdrawForm ? "Processing..." : "Withdraw"}
-        </button>
-      </div>
-      
-      {/* Deposit options menu */}
-      {showDepositOptions && (
-        <div className="bg-white rounded-md shadow-lg border border-gray-200 p-3 mb-3 z-10">
-          <div className="grid grid-cols-2 gap-2 mb-2">
-            {depositAmounts.map((amount) => (
-              <button
-                key={`deposit-${amount}`}
-                onClick={() => handleDeposit(amount)}
-                disabled={isProcessing || balanceUpdating}
-                className={`w-full px-4 py-2 rounded-md min-h-[44px] ${
-                  isProcessing || balanceUpdating
-                    ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                    : "bg-green-50 hover:bg-green-100 text-green-700"
-                } focus:outline-none`}
-              >
-                {CURRENCY_SYMBOL}{amount}
-              </button>
+        <Box sx={{ 
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          my: 2
+        }}>
+          <Typography variant="h4" component="div" sx={{ fontWeight: 'bold' }}>
+            ₹{realMoneyBalance.toFixed(2)}
+          </Typography>
+        </Box>
+        
+        <Box sx={{ 
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          mb: 2
+        }}>
+          <Chip 
+            label={`Withdrawable: ₹${withdrawableAmount.toFixed(2)}`} 
+            color="success" 
+            variant="outlined" 
+            size="small"
+          />
+        </Box>
+        
+        <Divider sx={{ my: 2 }} />
+        
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+          <Button 
+            variant="contained" 
+            color="primary" 
+            fullWidth
+            onClick={() => setIsDepositOpen(true)}
+          >
+            Deposit
+          </Button>
+          
+          <Button 
+            variant="outlined" 
+            color="primary" 
+            fullWidth
+            onClick={() => setIsWithdrawOpen(true)}
+            disabled={withdrawableAmount <= 0}
+          >
+            Withdraw
+          </Button>
+        </Box>
+      </Paper>
+
+      {/* Deposit Dialog */}
+      <Dialog 
+        open={isDepositOpen} 
+        onClose={!isProcessing ? handleCloseDeposit : undefined}
+      >
+        <DialogTitle>Deposit Funds</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            Quick deposit amounts:
+          </Typography>
+          <Grid container spacing={1} sx={{ mb: 3 }}>
+            {QUICK_AMOUNTS.map((amount) => (
+              <Grid item xs={6} key={amount}>
+                <Button 
+                  variant="outlined" 
+                  fullWidth
+                  onClick={() => handleQuickDeposit(amount)}
+                  disabled={isProcessing}
+                >
+                  ₹{amount}
+                </Button>
+              </Grid>
             ))}
-          </div>
+          </Grid>
           
-          {/* Custom amount section */}
-          <div className="mt-3">
-            <div className="flex space-x-2">
-              <input
-                type="number"
-                inputMode="decimal"
-                value={customAmount}
-                onChange={(e) => setCustomAmount(e.target.value)}
-                placeholder="Enter custom amount"
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[44px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                min="1"
-                step="0.01"
-              />
-              <button
-                onClick={handleCustomDeposit}
-                disabled={isProcessing || balanceUpdating || !customAmount}
-                className={`px-4 py-2 rounded-md min-w-[100px] min-h-[44px] ${
-                  isProcessing || balanceUpdating || !customAmount
-                    ? "bg-gray-300 cursor-not-allowed"
-                    : "bg-green-500 hover:bg-green-600 text-white"
-                }`}
-              >
-                Deposit
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {/* Withdraw form */}
-      {showWithdrawForm && (
-        <div className="bg-white rounded-md shadow-lg border border-gray-200 p-3 mb-3 z-10">
-          <div className="flex flex-col">
-            <label htmlFor="withdrawAmount" className="mb-1 text-sm font-medium text-gray-700">
-              Withdrawal amount
-            </label>
-            <div className="flex space-x-2">
-              <input
-                id="withdrawAmount"
-                type="number"
-                inputMode="decimal"
-                value={withdrawAmount}
-                onChange={(e) => setWithdrawAmount(e.target.value)}
-                placeholder={`Max ${CURRENCY_SYMBOL}${balance.toFixed(2)}`}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[44px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                min="1"
-                max={balance}
-                step="0.01"
-                autoFocus
-              />
-              <button
-                onClick={handleWithdraw}
-                disabled={isProcessing || balanceUpdating || !withdrawAmount || parseFloat(withdrawAmount) > balance}
-                className={`px-4 py-2 rounded-md min-w-[100px] min-h-[44px] ${
-                  isProcessing || balanceUpdating || !withdrawAmount || parseFloat(withdrawAmount) > balance
-                    ? "bg-gray-300 cursor-not-allowed"
-                    : "bg-red-500 hover:bg-red-600 text-white"
-                }`}
-              >
-                {isProcessing ? "Processing..." : "Confirm"}
-              </button>
-            </div>
-          </div>
+          <Divider sx={{ my: 2 }}>
+            <Typography variant="body2" color="text.secondary">OR</Typography>
+          </Divider>
           
-          <p className="mt-2 text-xs text-gray-500">
-            Withdrawals are processed within 1-3 business days.
-          </p>
-        </div>
-      )}
-    </div>
+          <Typography variant="body2" sx={{ mb: 1 }}>
+            Custom amount:
+          </Typography>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Amount (₹)"
+            type="number"
+            fullWidth
+            variant="outlined"
+            value={depositAmount}
+            onChange={(e) => setDepositAmount(e.target.value)}
+            InputProps={{
+              inputProps: { min: MIN_DEPOSIT }
+            }}
+            disabled={isProcessing}
+            sx={{ mb: 1 }}
+          />
+          <Typography variant="caption" color="text.secondary">
+            Minimum deposit: ₹{MIN_DEPOSIT}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseDeposit} disabled={isProcessing}>
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleCustomDeposit} 
+            variant="contained" 
+            color="primary"
+            disabled={isProcessing || !depositAmount || Number(depositAmount) < MIN_DEPOSIT}
+          >
+            {isProcessing ? 'Processing...' : 'Deposit'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Withdraw Dialog */}
+      <Dialog 
+        open={isWithdrawOpen} 
+        onClose={!isProcessing ? handleCloseWithdraw : undefined}
+      >
+        <DialogTitle>Withdraw Funds</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ mb: 1 }}>
+            Enter amount and UPI ID to withdraw funds
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+            You can only withdraw your winnings: ₹{withdrawableAmount.toFixed(2)}
+          </Typography>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Amount (₹)"
+            type="number"
+            fullWidth
+            variant="outlined"
+            value={withdrawAmount}
+            onChange={(e) => setWithdrawAmount(e.target.value)}
+            InputProps={{
+              inputProps: { min: MIN_WITHDRAW, max: withdrawableAmount }
+            }}
+            disabled={isProcessing}
+            sx={{ mb: 2 }}
+          />
+          <TextField
+            margin="dense"
+            label="UPI ID"
+            type="text"
+            fullWidth
+            variant="outlined"
+            placeholder="example@upi"
+            value={upiId}
+            onChange={(e) => setUpiId(e.target.value)}
+            disabled={isProcessing}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseWithdraw} disabled={isProcessing}>
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleWithdraw} 
+            variant="contained" 
+            color="primary"
+            disabled={
+              isProcessing || 
+              !withdrawAmount || 
+              Number(withdrawAmount) <= 0 || 
+              Number(withdrawAmount) < MIN_WITHDRAW ||
+              Number(withdrawAmount) > withdrawableAmount || 
+              !upiId
+            }
+          >
+            {isProcessing ? 'Processing...' : 'Withdraw'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
   );
 };
 

@@ -1,4 +1,7 @@
-import { logger } from "./logger";
+import { logger, createLogger } from './logger'
+// Create a component-specific logger
+const networkHandlerLogger = createLogger('networkHandler');
+;
 
 type OperationFunction<T> = () => Promise<T>;
 
@@ -23,12 +26,12 @@ class NetworkHandler {
   private setupNetworkListeners(): void {
     window.addEventListener('online', () => {
       this.isOnline = true;
-      logger.info('NetworkHandler', 'Network connection restored');
+      networkHandlerLogger.info('Network connection restored');
     });
 
     window.addEventListener('offline', () => {
       this.isOnline = false;
-      logger.warn('NetworkHandler', 'Network connection lost');
+      networkHandlerLogger.warn('Network connection lost');
     });
   }
 
@@ -41,7 +44,7 @@ class NetworkHandler {
       return await operation();
     } catch (error) {
       if (retryCount < this.maxRetries) {
-        logger.warn('NetworkHandler', 'Operation failed, retrying', {
+        networkHandlerLogger.warn('Operation failed, retrying', {
           error,
           retryCount,
           maxRetries: this.maxRetries
@@ -51,7 +54,7 @@ class NetworkHandler {
         return this.executeOperation(operation, retryCount + 1);
       }
       
-      logger.error('NetworkHandler', 'Operation failed after max retries', {
+      networkHandlerLogger.error('Operation failed after max retries', {
         error,
         retryCount
       });

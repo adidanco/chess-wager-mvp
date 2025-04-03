@@ -7,7 +7,10 @@
 
 import { doc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase";
-import { logger } from "../utils/logger";
+import { logger, createLogger } from '../utils/logger'
+// Create a component-specific logger
+const ratingServiceLogger = createLogger('ratingService');
+;
 import { 
   GlickoRating, 
   GameResult, 
@@ -43,7 +46,7 @@ export async function updateRatingsAfterGame(
   result: 'win' | 'loss' | 'draw'
 ): Promise<boolean> {
   try {
-    logger.info('RatingService', 'Updating ratings after game', {
+    ratingServiceLogger.info('Updating ratings after game', {
       gameId,
       playerOneId,
       playerTwoId,
@@ -55,7 +58,7 @@ export async function updateRatingsAfterGame(
     const playerTwoDoc = await getDoc(doc(db, "users", playerTwoId));
 
     if (!playerOneDoc.exists() || !playerTwoDoc.exists()) {
-      logger.error('RatingService', 'Player document not found', {
+      ratingServiceLogger.error('Player document not found', {
         playerOneExists: playerOneDoc.exists(),
         playerTwoExists: playerTwoDoc.exists()
       });
@@ -125,7 +128,7 @@ export async function updateRatingsAfterGame(
       "updatedAt": serverTimestamp()
     });
 
-    logger.info('RatingService', 'Ratings updated successfully', {
+    ratingServiceLogger.info('Ratings updated successfully', {
       gameId,
       playerOne: {
         oldRating: playerOneRating.rating,
@@ -142,7 +145,7 @@ export async function updateRatingsAfterGame(
     return true;
   } catch (error) {
     const err = error as Error;
-    logger.error('RatingService', 'Failed to update ratings', { error: err });
+    ratingServiceLogger.error('Failed to update ratings', { error: err });
     return false;
   }
 }
@@ -191,7 +194,7 @@ export async function calculateMatchupProbabilities(
       playerTwoWinProb: adjustedPlayerTwoWinProb
     };
   } catch (error) {
-    logger.error('RatingService', 'Failed to calculate matchup probabilities', { error });
+    ratingServiceLogger.error('Failed to calculate matchup probabilities', { error });
     return null;
   }
 } 

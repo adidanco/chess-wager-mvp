@@ -8,7 +8,10 @@
  * Reference: http://www.glicko.net/glicko/glicko2.pdf
  */
 
-import { logger } from './logger';
+import { logger, createLogger } from './logger'
+// Create a component-specific logger
+const ratingSystemLogger = createLogger('ratingSystem');
+;
 
 /**
  * Player rating data
@@ -273,7 +276,7 @@ export function updateRatingForInactivity(rating: GlickoRating, currentTimestamp
       SYSTEM_CONSTANTS.MAX_RD
     );
     
-    logger.info('RatingSystem', 'Increased RD due to inactivity', {
+    ratingSystemLogger.info('Increased RD due to inactivity', {
       previousRD: rating.rd,
       newRD,
       daysSinceLastGame,
@@ -343,7 +346,7 @@ export function updateRating(currentRating: GlickoRating, results: GameResult[])
     lastPlayedTimestamp: now
   });
   
-  logger.info('RatingSystem', 'Rating updated', {
+  ratingSystemLogger.info('Rating updated', {
     oldRating: rating.rating,
     newRating: updatedRating.rating,
     ratingChange: updatedRating.rating - rating.rating,

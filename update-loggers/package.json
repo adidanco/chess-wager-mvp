@@ -1,0 +1,11 @@
+{
+  "name": "update-loggers",
+  "version": "1.0.0",
+  "description": "Script to update logger calls",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "author": "",
+  "license": "ISC"
+}

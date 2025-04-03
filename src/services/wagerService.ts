@@ -1,7 +1,10 @@
 import { doc, updateDoc, getDoc, serverTimestamp, increment, runTransaction } from 'firebase/firestore';
 import { db, functions } from '../firebase';
 import { processGamePayout } from './transactionService';
-import { logger } from '../utils/logger';
+import { logger, createLogger } from '../utils/logger'
+// Create a component-specific logger
+const wagerServiceLogger = createLogger('wagerService');
+;
 import { GameStatus } from '../utils/constants';
 import { httpsCallable } from 'firebase/functions';
 import { v4 as uuidv4 } from 'uuid';
@@ -22,7 +25,7 @@ export const setGameWagerType = async (
       updatedAt: serverTimestamp(),
     });
   } catch (error) {
-    logger.error('wagerService', 'Failed to set game wager type', { gameId, error });
+    wagerServiceLogger.error('Failed to set game wager type', { gameId, error });
     throw error;
   }
 };
@@ -166,7 +169,7 @@ export const processGameEnd = async (
   useRealMoney: boolean
 ): Promise<boolean> => {
   try {
-    logger.info('wagerService', 'Processing game end', { 
+    wagerServiceLogger.info('Processing game end', { 
       gameId, 
       winnerId, 
       loserId, 
@@ -178,129 +181,140 @@ export const processGameEnd = async (
     // Generate a unique idempotency key for this payout operation
     const idempotencyKey = `payout_${gameId}_${Date.now()}_${uuidv4().substring(0, 8)}`;
     
-    if (useRealMoney) {
-      // Handle real money payout through Cloud Functions
-      const payoutFn = httpsCallable(functions, 'processGamePayout');
-      const result = await payoutFn({ 
-        gameId, 
-        winnerId, 
-        loserId, 
-        isDraw, 
-        wagerAmount,
-        idempotencyKey
-      });
+    // Always use client-side Firestore transaction implementation
+    // to avoid CORS issues with Cloud Functions
+    const gameRef = doc(db, 'games', gameId);
+    
+    // Execute the transaction directly from the client
+    await runTransaction(db, async (transaction) => {
+      // Get game document first to check if payout already processed
+      const gameDoc = await transaction.get(gameRef);
       
-      const payoutResult = result.data as { success: boolean };
-      logger.info('wagerService', 'Real money payout processed', { 
-        gameId, 
-        result: payoutResult 
-      });
+      if (!gameDoc.exists()) {
+        throw new Error('Game not found');
+      }
       
-      return payoutResult.success;
-    } else {
-      // Handle in-game currency through Firestore transactions
-      await runTransaction(db, async (transaction) => {
-        // Get game document first to check if payout already processed
-        const gameRef = doc(db, 'games', gameId);
-        const gameDoc = await transaction.get(gameRef);
+      const gameData = gameDoc.data();
+      
+      if (gameData?.payoutProcessed) {
+        wagerServiceLogger.warn('Payout already processed', { gameId });
+        return; // Exit early if already processed
+      }
+      
+      // Handle draw case
+      if (isDraw) {
+        const player1Id = gameData.player1Id;
+        const player2Id = gameData.player2Id;
         
-        if (!gameDoc.exists()) {
-          throw new Error('Game not found');
+        if (!player1Id || !player2Id) {
+          throw new Error('Players not found for draw');
         }
         
-        const gameData = gameDoc.data();
+        const player1Ref = doc(db, 'users', player1Id);
+        const player2Ref = doc(db, 'users', player2Id);
         
-        if (gameData?.payoutProcessed) {
-          logger.warn('wagerService', 'Payout already processed', { gameId });
-          return; // Exit early if already processed
-        }
-        
-        if (isDraw) {
-          // In case of a draw, return wagered amount to both players
-          if (winnerId) {
-            const winnerRef = doc(db, 'users', winnerId);
-            transaction.update(winnerRef, {
-              balance: increment(wagerAmount),
-              updatedAt: serverTimestamp()
-            });
-            
-            const transactionRef1 = doc(db, 'transactions', `${gameId}_draw_p1_${Date.now()}`);
-            transaction.set(transactionRef1, {
-              userId: winnerId,
-              type: 'wager_refund',
-              amount: wagerAmount, 
-              status: 'completed',
-              timestamp: serverTimestamp(),
-              relatedGameId: gameId,
-              idempotencyKey,
-              notes: `Refund for draw in game ${gameId}`
-            });
-          }
-          
-          if (loserId) {
-            const loserRef = doc(db, 'users', loserId);
-            transaction.update(loserRef, {
-              balance: increment(wagerAmount),
-              updatedAt: serverTimestamp()
-            });
-            
-            const transactionRef2 = doc(db, 'transactions', `${gameId}_draw_p2_${Date.now()}`);
-            transaction.set(transactionRef2, {
-              userId: loserId,
-              type: 'wager_refund',
-              amount: wagerAmount,
-              status: 'completed',
-              timestamp: serverTimestamp(),
-              relatedGameId: gameId,
-              idempotencyKey,
-              notes: `Refund for draw in game ${gameId}`
-            });
-          }
-        } else if (winnerId) {
-          // Calculate total pot and platform fee
-          const totalPot = wagerAmount * 2;
-          const platformFee = Math.floor(totalPot * 0.05); // 5% platform fee
-          const winnerPayout = totalPot - platformFee;
-          
-          // Update winner's balance
-          const winnerRef = doc(db, 'users', winnerId);
-          transaction.update(winnerRef, {
-            balance: increment(winnerPayout),
-            updatedAt: serverTimestamp()
-          });
-          
-          // Record the payout transaction
-          const transactionRef = doc(db, 'transactions', `${gameId}_payout_${Date.now()}`);
-          transaction.set(transactionRef, {
-            userId: winnerId,
-            type: 'wager_payout',
-            amount: winnerPayout,
-            status: 'completed',
-            timestamp: serverTimestamp(),
-            relatedGameId: gameId,
-            platformFee,
-            idempotencyKey,
-            notes: `Winnings from game ${gameId} (after 5% platform fee)`
-          });
-        }
-        
-        // Mark the game as having processed payout
-        transaction.update(gameRef, {
-          payoutProcessed: true,
-          payoutTimestamp: serverTimestamp()
+        // Return wagers to both players
+        transaction.update(player1Ref, {
+          realMoneyBalance: increment(wagerAmount),
+          updatedAt: serverTimestamp()
         });
-      });
+        
+        // Create transaction record for player 1
+        const transaction1Ref = doc(db, 'transactions', `${gameId}_draw_p1_${Date.now()}`);
+        transaction.set(transaction1Ref, {
+          userId: player1Id,
+          type: 'wager_refund',
+          amount: wagerAmount,
+          status: 'completed',
+          timestamp: serverTimestamp(),
+          relatedGameId: gameId,
+          idempotencyKey,
+          notes: `Refund for draw in game ${gameId}`
+        });
+        
+        // Return wager to player 2
+        transaction.update(player2Ref, {
+          realMoneyBalance: increment(wagerAmount),
+          updatedAt: serverTimestamp()
+        });
+        
+        // Create transaction record for player 2
+        const transaction2Ref = doc(db, 'transactions', `${gameId}_draw_p2_${Date.now()}`);
+        transaction.set(transaction2Ref, {
+          userId: player2Id,
+          type: 'wager_refund',
+          amount: wagerAmount,
+          status: 'completed',
+          timestamp: serverTimestamp(),
+          relatedGameId: gameId,
+          idempotencyKey,
+          notes: `Refund for draw in game ${gameId}`
+        });
+      } 
+      // Handle winner case
+      else if (winnerId) {
+        // Ensure the winner exists
+        const winnerRef = doc(db, 'users', winnerId);
+        const winnerDoc = await transaction.get(winnerRef);
+        
+        if (!winnerDoc.exists()) {
+          throw new Error(`Winner user ${winnerId} not found`);
+        }
+        
+        // Calculate total pot and platform fee
+        const totalPot = wagerAmount * 2;
+        const platformFee = Math.floor(totalPot * 0.05); // 5% platform fee
+        const winnerPayout = totalPot - platformFee;
+        
+        wagerServiceLogger.info('Processing winner payout', {
+          gameId,
+          winnerId,
+          wagerAmount, 
+          totalPot,
+          platformFee,
+          winnerPayout
+        });
+        
+        // Update winner's balance
+        transaction.update(winnerRef, {
+          realMoneyBalance: increment(winnerPayout),
+          withdrawableAmount: increment(winnerPayout),
+          updatedAt: serverTimestamp()
+        });
+        
+        // Record the payout transaction
+        const transactionRef = doc(db, 'transactions', `${gameId}_payout_${Date.now()}`);
+        transaction.set(transactionRef, {
+          userId: winnerId,
+          type: 'wager_payout',
+          amount: winnerPayout,
+          status: 'completed',
+          timestamp: serverTimestamp(),
+          relatedGameId: gameId,
+          platformFee,
+          idempotencyKey,
+          notes: `Winnings from game ${gameId} (after 5% platform fee)`
+        });
+      } else {
+        throw new Error('Cannot process payout without a winnerId for a non-draw game');
+      }
       
-      logger.info('wagerService', 'In-game currency payout processed', { 
-        gameId, 
-        isDraw, 
-        winnerId 
+      // Mark the game as having processed payout
+      transaction.update(gameRef, {
+        payoutProcessed: true,
+        payoutTimestamp: serverTimestamp()
       });
-      
-      return true;
-    }
+    });
+    
+    wagerServiceLogger.info('Payout processed successfully via client transaction', { 
+      gameId, 
+      isDraw, 
+      winnerId 
+    });
+    
+    return true;
   } catch (error: any) {
-    logger.error('wagerService', 'Failed to process game end payout', { 
+    wagerServiceLogger.error('Failed to process game end payout', { 
       error: error.message, 
       gameId 
     });

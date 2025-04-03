@@ -7,7 +7,10 @@
 
 import { collection, query, where, getDocs, orderBy, limit } from "firebase/firestore";
 import { db } from "../firebase";
-import { logger } from "../utils/logger";
+import { logger, createLogger } from '../utils/logger'
+// Create a component-specific logger
+const matchmakingServiceLogger = createLogger('matchmakingService');
+;
 import { calculateWinProbability } from "../utils/ratingSystem";
 import { userStatsToGlickoRating } from "./ratingService";
 import { UserProfile } from "chessTypes";
@@ -47,7 +50,7 @@ export async function findPotentialOpponents(
     ));
     
     if (userDoc.empty) {
-      logger.error('MatchmakingService', 'User not found', { userId });
+      matchmakingServiceLogger.error('User not found', { userId });
       return [];
     }
     
@@ -69,7 +72,7 @@ export async function findPotentialOpponents(
     ));
     
     if (potentialOpponents.empty) {
-      logger.info('MatchmakingService', 'No potential opponents found in rating range', {
+      matchmakingServiceLogger.info('No potential opponents found in rating range', {
         userId,
         userRating,
         minRating,
@@ -129,7 +132,7 @@ export async function findPotentialOpponents(
     return matches.slice(0, maxResults);
     
   } catch (error) {
-    logger.error('MatchmakingService', 'Error finding potential opponents', { error, userId });
+    matchmakingServiceLogger.error('Error finding potential opponents', { error, userId });
     return [];
   }
 }
@@ -154,7 +157,7 @@ export async function findCompatibleGames(
     ));
     
     if (userDoc.empty) {
-      logger.error('MatchmakingService', 'User not found', { userId });
+      matchmakingServiceLogger.error('User not found', { userId });
       return [];
     }
     
@@ -169,7 +172,7 @@ export async function findCompatibleGames(
     ));
     
     if (games.empty) {
-      logger.info('MatchmakingService', 'No available games found', { userId });
+      matchmakingServiceLogger.info('No available games found', { userId });
       return [];
     }
     
@@ -218,7 +221,7 @@ export async function findCompatibleGames(
     return compatibleGames;
     
   } catch (error) {
-    logger.error('MatchmakingService', 'Error finding compatible games', { error, userId });
+    matchmakingServiceLogger.error('Error finding compatible games', { error, userId });
     return [];
   }
 } 

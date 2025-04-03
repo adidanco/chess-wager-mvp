@@ -4,7 +4,10 @@ import { signInWithEmailAndPassword, AuthError } from "firebase/auth"
 import { doc, updateDoc, getDoc, serverTimestamp, query, where, collection, getDocs } from "firebase/firestore"
 import { auth, db } from "../firebase"
 import toast from "react-hot-toast"
-import { logger } from "../utils/logger"
+import { logger, createLogger } from '../utils/logger'
+// Create a component-specific logger
+const LoginLogger = createLogger('Login');
+
 
 export default function Login(): JSX.Element {
   const navigate = useNavigate()
@@ -76,7 +79,7 @@ export default function Login(): JSX.Element {
         })
       }
       
-      logger.info('Login', 'Login successful with email/password', { 
+      LoginLogger.info('Login successful with email/password', { 
         userId: userCredential.user.uid, 
         email 
       })
@@ -85,7 +88,7 @@ export default function Login(): JSX.Element {
       navigate("/")
     } catch (error) {
       const err = error as Error
-      logger.error('Login', 'Login failed', { error: err })
+      LoginLogger.error('Login failed', { error: err })
       toast.error(err.message)
     } finally {
       setLoading(false)
@@ -104,7 +107,7 @@ export default function Login(): JSX.Element {
       // In a real app, we would send an OTP via SMS here
       // For demo purposes, we're simulating success
       
-      logger.info('Login', 'Sending OTP to mobile', { mobileNumber })
+      LoginLogger.info('Sending OTP to mobile', { mobileNumber })
       
       // Simulate API call delay
       await new Promise(resolve => setTimeout(resolve, 1000))
@@ -114,7 +117,7 @@ export default function Login(): JSX.Element {
       toast.success(`OTP sent to ${mobileNumber}. For demo, use code: ${DEMO_OTP}`)
     } catch (error) {
       const err = error as Error
-      logger.error('Login', 'Failed to send OTP', { error: err, mobileNumber })
+      LoginLogger.error('Failed to send OTP', { error: err, mobileNumber })
       toast.error("Failed to send OTP. Please try again.")
     } finally {
       setLoading(false)
@@ -167,7 +170,7 @@ export default function Login(): JSX.Element {
         mobileVerified: true
       })
       
-      logger.info('Login', 'Login successful with mobile OTP', { 
+      LoginLogger.info('Login successful with mobile OTP', { 
         userId: userDoc.id, 
         mobileNumber 
       })
@@ -178,7 +181,7 @@ export default function Login(): JSX.Element {
       navigate("/")
     } catch (error) {
       const err = error as Error
-      logger.error('Login', 'Mobile login failed', { error: err, mobileNumber })
+      LoginLogger.error('Mobile login failed', { error: err, mobileNumber })
       toast.error(err.message)
     } finally {
       setLoading(false)

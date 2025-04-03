@@ -4,12 +4,15 @@ import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase";
 import { GAME_STATUS } from "../utils/constants";
 import { toast } from "react-hot-toast";
-import { logger } from "../utils/logger";
+import { logger, createLogger } from '../utils/logger'
+// Create a component-specific logger
+const useCreateGameLogger = createLogger('useCreateGame');
+;
 import { AuthContext } from "../context/AuthContext";
 import { GameData } from "chessTypes";
 
 interface GameOptions {
-  title: string;
+  title?: string;     // Made optional
   wager: number;
   isRealMoney: boolean;
   creatorColor: 'white' | 'black' | 'random';
@@ -18,7 +21,7 @@ interface GameOptions {
 
 export const useCreateGame = () => {
   const [loading, setLoading] = useState(false);
-  const { currentUser, userProfile, updateBalance } = useContext(AuthContext) || {};
+  const { currentUser, userProfile } = useContext(AuthContext) || {};
 
   const createGame = async (options: GameOptions): Promise<string | null> => {
     if (!currentUser) {
@@ -32,22 +35,18 @@ export const useCreateGame = () => {
       return null;
     }
     
-    // Check balance based on wager type
-    if (options.wager > 0) {
-      const availableBalance = options.isRealMoney 
-        ? (userProfile?.realMoneyBalance || 0) 
-        : (userProfile?.balance || 0);
+    // Check real money balance
+    const availableBalance = userProfile?.realMoneyBalance || 0;
         
-      if (options.wager > availableBalance) {
-        toast.error(`Insufficient ${options.isRealMoney ? 'real money' : 'game currency'} balance!`);
-        return null;
-      }
+    if (options.wager > availableBalance) {
+      toast.error(`Insufficient balance for this wager`);
+      return null;
     }
     
     setLoading(true);
     
     try {
-      logger.info('useCreateGame', 'Creating new game', { 
+      useCreateGameLogger.info('Creating new game', { 
         userId: currentUser.uid,
         wager: options.wager,
         timeControl: options.timeControl,
@@ -59,34 +58,33 @@ export const useCreateGame = () => {
       const initialFen = chess.fen();
       
       // Determine player colors
-      let whitePlayerId: string | undefined = undefined;
-      let blackPlayerId: string | undefined = undefined;
+      let whitePlayerId = null; // Use null instead of undefined
+      let blackPlayerId = null; // Use null instead of undefined
       
       if (options.creatorColor === 'white') {
         whitePlayerId = currentUser.uid;
       } else if (options.creatorColor === 'black') {
         blackPlayerId = currentUser.uid;
-      } else {
-        // Random color assignment will happen when player joins
-      }
+      } 
+      // Random color will be assigned when someone joins
       
-      // Create the game in Firestore
-      const newGame: Partial<GameData> = {
-        title: options.title || `${currentUser.displayName || 'Anonymous'}'s Game`,
+      // Create the game in Firestore - avoid undefined values
+      const newGame: Record<string, any> = {
+        title: options.title || `${userProfile?.username || 'Anonymous'}'s Game`,
         whitePlayer: whitePlayerId,
         blackPlayer: blackPlayerId,
         player1Id: currentUser.uid, // Game creator ID
-        player2Id: undefined, // Will be set when someone joins
+        player2Id: null, // Will be set when someone joins
         wager: options.wager,
         status: GAME_STATUS.WAITING,
         createdAt: serverTimestamp(),
         fen: initialFen,
-        currentTurn: "w",
+        currentTurn: "w", // White always starts in chess
         whiteTime: options.timeControl * 1000, // Convert to ms
         blackTime: options.timeControl * 1000, // Convert to ms
         timeControl: options.timeControl * 1000, // Convert to ms
         moveHistory: [],
-        useRealMoney: options.isRealMoney, // Add flag for real money games
+        useRealMoney: true, // Always real money
         wagersDebited: false, // Will be set to true when wagers are debited
         payoutProcessed: false, // Will be set to true when payout is processed
         creatorPreferredColor: options.creatorColor
@@ -94,24 +92,17 @@ export const useCreateGame = () => {
       
       const gameRef = await addDoc(collection(db, "games"), newGame);
       
-      logger.info('useCreateGame', 'Game created successfully', { 
+      useCreateGameLogger.info('Game created successfully', { 
         gameId: gameRef.id,
         userId: currentUser.uid,
         timeControl: options.timeControl,
         isRealMoney: options.isRealMoney
       });
       
-      // For game currency, we'll deduct the amount immediately
-      // For real money, this will be handled when the game starts via cloud functions
-      if (options.wager > 0 && !options.isRealMoney) {
-        // Deduct wager from user's balance
-        await updateBalance?.(-options.wager, "game creation");
-      }
-      
       return gameRef.id;
     } catch (error) {
       const err = error as Error;
-      logger.error('useCreateGame', 'Error creating game', { 
+      useCreateGameLogger.error('Error creating game', { 
         error: err, 
         userId: currentUser?.uid 
       });

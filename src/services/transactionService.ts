@@ -16,6 +16,13 @@ import {
   Timestamp
 } from 'firebase/firestore';
 import { db, functions } from '../firebase';
+import { 
+  handleError, 
+  handlePaymentError, 
+  handleTransactionError, 
+  ErrorCategory 
+} from '../utils/errorHandler';
+import { v4 as uuidv4 } from 'uuid';
 
 // Firebase instances
 const auth = getAuth();
@@ -25,13 +32,16 @@ const auth = getAuth();
  */
 export const createOrder = async (amount: number): Promise<any> => {
   try {
+    const idempotencyKey = uuidv4();
     const createRazorpayOrder = httpsCallable(functions, 'createRazorpayOrder');
-    const result = await createRazorpayOrder({ amount });
+    const result = await createRazorpayOrder({ 
+      amount,
+      idempotencyKey
+    });
     return result.data;
   } catch (error: any) {
-    console.error("Error creating Razorpay order:", error);
-    toast.error(error.message || "Failed to create payment order");
-    throw error;
+    handlePaymentError(error, { amount, operation: 'createOrder' });
+    throw error; // Re-throw to allow component-level handling
   }
 };
 
@@ -44,13 +54,20 @@ export const verifyPayment = async (paymentData: {
   razorpay_signature: string;
 }): Promise<any> => {
   try {
+    const idempotencyKey = uuidv4();
     const verifyRazorpayPayment = httpsCallable(functions, 'verifyRazorpayPayment');
-    const result = await verifyRazorpayPayment(paymentData);
+    const result = await verifyRazorpayPayment({
+      ...paymentData,
+      idempotencyKey
+    });
     return result.data;
   } catch (error: any) {
-    console.error("Error verifying payment:", error);
-    toast.error(error.message || "Failed to verify payment");
-    throw error;
+    handlePaymentError(error, { 
+      paymentId: paymentData.razorpay_payment_id,
+      orderId: paymentData.razorpay_order_id,
+      operation: 'verifyPayment' 
+    });
+    throw error; // Re-throw to allow component-level handling
   }
 };
 
@@ -66,6 +83,7 @@ export const confirmDeposit = async (amount: number, upiTransactionId?: string):
     // In a production environment, you might want to call a cloud function for this
     // For the MVP, we'll directly create the transaction in Firestore
     const userId = auth.currentUser.uid;
+    const idempotencyKey = uuidv4();
     
     // Create a deposit transaction
     const transactionRef = collection(db, 'transactions');
@@ -76,6 +94,7 @@ export const confirmDeposit = async (amount: number, upiTransactionId?: string):
       status: 'completed' as TransactionStatus,
       timestamp: serverTimestamp(),
       upiTransactionId,
+      idempotencyKey,
       notes: `Deposit of ₹${amount} via UPI${upiTransactionId ? ` (ID: ${upiTransactionId})` : ''}`
     });
 
@@ -84,7 +103,8 @@ export const confirmDeposit = async (amount: number, upiTransactionId?: string):
     const depositFunction = httpsCallable(functions, 'processDeposit');
     await depositFunction({ 
       amount, 
-      transactionId: newTransaction.id 
+      transactionId: newTransaction.id,
+      idempotencyKey
     });
 
     return { 
@@ -102,12 +122,20 @@ export const confirmDeposit = async (amount: number, upiTransactionId?: string):
  */
 export const requestWithdrawal = async (amount: number, upiId: string): Promise<any> => {
   try {
+    const idempotencyKey = uuidv4();
     const requestWithdrawalFn = httpsCallable(functions, 'requestWithdrawal');
-    const result = await requestWithdrawalFn({ amount, upiId });
+    const result = await requestWithdrawalFn({ 
+      amount, 
+      upiId,
+      idempotencyKey 
+    });
     return result.data;
   } catch (error: any) {
-    console.error("Error requesting withdrawal:", error);
-    toast.error(error.message || "Failed to request withdrawal");
+    handleTransactionError(error, {
+      amount,
+      upiId,
+      operation: 'requestWithdrawal'
+    });
     throw error;
   }
 };
@@ -122,12 +150,14 @@ export const debitWagersForGame = async (
   wagerAmount: number
 ): Promise<{ success: boolean }> => {
   try {
+    const idempotencyKey = uuidv4();
     const debitWagersFn = httpsCallable(functions, 'debitWagersForGame');
     const result = await debitWagersFn({ 
       gameId, 
       player1Id, 
       player2Id, 
-      wagerAmount 
+      wagerAmount,
+      idempotencyKey
     });
     return result.data as { success: boolean };
   } catch (error: any) {
@@ -147,13 +177,15 @@ export const processGamePayout = async (
   wagerAmount: number
 ): Promise<{ success: boolean }> => {
   try {
+    const idempotencyKey = uuidv4();
     const processPayoutFn = httpsCallable(functions, 'processGamePayout');
     const result = await processPayoutFn({
       gameId,
       winnerId,
       loserId,
       isDraw,
-      wagerAmount
+      wagerAmount,
+      idempotencyKey
     });
     return result.data as { success: boolean };
   } catch (error: any) {
@@ -188,8 +220,10 @@ export const getTransactionHistory = async (userId: string): Promise<Transaction
     
     return transactions;
   } catch (error: any) {
-    console.error("Error fetching transaction history:", error);
-    toast.error("Failed to load transaction history");
+    handleError(error, "Failed to load transaction history", {
+      category: ErrorCategory.DATABASE,
+      context: { userId, operation: 'getTransactionHistory' }
+    });
     throw error;
   }
 };

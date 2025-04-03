@@ -55,6 +55,7 @@ declare module 'chessTypes' {
     username?: string;
     balance?: number;
     realMoneyBalance?: number; // Added for real money
+    withdrawableAmount?: number; // Added to track winnings that can be withdrawn
     pendingWithdrawalAmount?: number; // Added for tracking withdrawal requests
     photoURL?: string;
     stats?: UserStats;
@@ -105,12 +106,13 @@ declare module 'chessTypes' {
     isAuthenticated: boolean;
     balance: number;
     realMoneyBalance?: number; // Added for real money
+    withdrawableAmount?: number; // Added for tracking winnings that can be withdrawn
     pendingWithdrawalAmount?: number; // Added for tracking withdrawals
     username: string;
     stats: UserStats;
     updateProfile: (updates: Partial<UserProfile>) => Promise<boolean>;
     logout: () => Promise<void>;
-    updateBalance: (amount: number, reason: string) => Promise<boolean>;
+    updateBalance: (amount: number, reason: string, isWinnings?: boolean) => Promise<boolean>;
     balanceUpdating: boolean;
     emailVerified: boolean;
   }

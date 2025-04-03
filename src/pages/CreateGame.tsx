@@ -11,9 +11,6 @@ export default function CreateGame() {
   const { createGame, loading } = useCreateGame();
   
   // Game settings
-  const [gameTitle, setGameTitle] = useState<string>("");
-  const [gameMode, setGameMode] = useState<'friendly' | 'wager'>('friendly');
-  const [wagerType, setWagerType] = useState<'coin' | 'real'>('coin');
   const [wagerAmount, setWagerAmount] = useState<number>(10);
   const [creatorColor, setCreatorColor] = useState<'white' | 'black' | 'random'>('random');
   const [timeControl, setTimeControl] = useState<number>(600); // Default 10 minutes
@@ -22,10 +19,11 @@ export default function CreateGame() {
     e.preventDefault();
     
     try {
+      // Ensure gameOptions matches the expected interface in useCreateGame.ts
       const gameOptions = {
-        title: gameTitle,
-        wager: gameMode === 'wager' ? wagerAmount : 0,
-        isRealMoney: gameMode === 'wager' && wagerType === 'real',
+        title: `${userProfile?.username || 'Anonymous'}'s Game`,
+        wager: wagerAmount,
+        isRealMoney: true, // Always real money
         creatorColor,
         timeControl
       };
@@ -54,109 +52,23 @@ export default function CreateGame() {
               <div className="card-body">
                 <form onSubmit={handleCreateGame}>
                   <div className="mb-3">
-                    <label htmlFor="gameTitle" className="form-label">Game Title</label>
+                    <label htmlFor="wagerAmount" className="form-label">
+                      Wager Amount (₹)
+                    </label>
                     <input
-                      type="text"
+                      type="number"
                       className="form-control"
-                      id="gameTitle"
-                      value={gameTitle}
-                      onChange={e => setGameTitle(e.target.value)}
-                      placeholder="Enter a title for your game"
-                      maxLength={30}
+                      id="wagerAmount"
+                      value={wagerAmount}
+                      onChange={e => setWagerAmount(Number(e.target.value))}
+                      min={10}
+                      max={5000}
                       required
                     />
-                  </div>
-                  
-                  <div className="mb-4">
-                    <label className="form-label">Game Mode</label>
-                    <div className="d-flex gap-3">
-                      <div className="form-check">
-                        <input
-                          type="radio"
-                          className="form-check-input"
-                          id="friendly"
-                          name="gameMode"
-                          value="friendly"
-                          checked={gameMode === 'friendly'}
-                          onChange={() => setGameMode('friendly')}
-                        />
-                        <label className="form-check-label" htmlFor="friendly">Friendly Game</label>
-                      </div>
-                      <div className="form-check">
-                        <input
-                          type="radio"
-                          className="form-check-input"
-                          id="wager"
-                          name="gameMode"
-                          value="wager"
-                          checked={gameMode === 'wager'}
-                          onChange={() => setGameMode('wager')}
-                        />
-                        <label className="form-check-label" htmlFor="wager">Wager Game</label>
-                      </div>
+                    <div className="form-text">
+                      Your balance: ₹{userProfile?.realMoneyBalance || 0}
                     </div>
                   </div>
-                  
-                  {gameMode === 'wager' && (
-                    <>
-                      <div className="mb-4">
-                        <label className="form-label">Wager Type</label>
-                        <div className="d-flex gap-3">
-                          <div className="form-check">
-                            <input
-                              type="radio"
-                              className="form-check-input"
-                              id="coinWager"
-                              name="wagerType"
-                              value="coin"
-                              checked={wagerType === 'coin'}
-                              onChange={() => setWagerType('coin')}
-                            />
-                            <label className="form-check-label" htmlFor="coinWager">Game Coins</label>
-                          </div>
-                          <div className="form-check">
-                            <input
-                              type="radio"
-                              className="form-check-input"
-                              id="realMoneyWager"
-                              name="wagerType"
-                              value="real"
-                              checked={wagerType === 'real'}
-                              onChange={() => setWagerType('real')}
-                            />
-                            <label className="form-check-label" htmlFor="realMoneyWager">Real Money</label>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="mb-3">
-                        <label htmlFor="wagerAmount" className="form-label">
-                          Wager Amount 
-                          {wagerType === 'real' ? ' (₹)' : ' (Coins)'}
-                        </label>
-                        <input
-                          type="number"
-                          className="form-control"
-                          id="wagerAmount"
-                          value={wagerAmount}
-                          onChange={e => setWagerAmount(Number(e.target.value))}
-                          min={wagerType === 'real' ? 10 : 1}
-                          max={wagerType === 'real' ? 5000 : 1000}
-                          required={gameMode === 'wager'}
-                        />
-                        {wagerType === 'real' && (
-                          <div className="form-text">
-                            Your balance: ₹{userProfile?.realMoneyBalance || 0}
-                          </div>
-                        )}
-                        {wagerType === 'coin' && (
-                          <div className="form-text">
-                            Your balance: {userProfile?.balance || 0} coins
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  )}
                   
                   <div className="mb-3">
                     <label className="form-label">Choose Your Color</label>
@@ -246,14 +158,15 @@ export default function CreateGame() {
                     <button 
                       type="submit" 
                       className="btn btn-primary btn-lg"
-                      disabled={
-                        loading || 
-                        (gameMode === 'wager' && wagerType === 'coin' && (userProfile?.balance || 0) < wagerAmount) ||
-                        (gameMode === 'wager' && wagerType === 'real' && (userProfile?.realMoneyBalance || 0) < wagerAmount)
-                      }
+                      disabled={loading || wagerAmount <= 0 || wagerAmount > (userProfile?.realMoneyBalance || 0)}
                     >
                       {loading ? 'Creating Game...' : 'Create Game'}
                     </button>
+                    {wagerAmount > (userProfile?.realMoneyBalance || 0) && (
+                      <div className="text-danger">
+                        Insufficient balance. Please add funds or reduce wager amount.
+                      </div>
+                    )}
                   </div>
                 </form>
               </div>

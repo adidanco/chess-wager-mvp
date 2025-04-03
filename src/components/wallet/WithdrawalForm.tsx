@@ -3,6 +3,7 @@ import { Box, Button, TextField, Typography, Paper, CircularProgress, Alert } fr
 import { requestWithdrawal } from '../../services/transactionService';
 import { useAuth } from '../../hooks/useAuth';
 import { toast } from 'react-hot-toast';
+import { validateWithdrawalData, validateUpiId } from '../../utils/validator';
 
 const WITHDRAWAL_AMOUNTS = [100, 200, 500, 1000, 2000, 5000];
 
@@ -19,6 +20,7 @@ export const WithdrawalForm: React.FC = () => {
   const handleAmountSelect = (value: number) => {
     setAmount(value);
     setCustomAmount('');
+    setError(null);
   };
 
   // Handle custom amount input
@@ -28,18 +30,14 @@ export const WithdrawalForm: React.FC = () => {
     if (/^\d*$/.test(value)) {
       setCustomAmount(value);
       setAmount(value ? parseInt(value, 10) : 0);
+      setError(null);
     }
   };
 
   // Handle UPI ID input
   const handleUpiIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setUpiId(e.target.value);
-  };
-
-  // Validate UPI ID format
-  const isValidUpiId = (upi: string): boolean => {
-    // Basic UPI ID validation: username@provider format
-    return /^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+$/.test(upi);
+    setError(null);
   };
 
   // Handle withdrawal request
@@ -47,27 +45,20 @@ export const WithdrawalForm: React.FC = () => {
     // Reset error state
     setError(null);
     
-    // Validate amount
-    if (amount <= 0) {
-      setError('Please enter a valid amount');
-      return;
-    }
+    // Use our validator utility
+    const validData = validateWithdrawalData(
+      { amount, upiId: upiId.trim() },
+      realMoneyBalance || 0
+    );
     
-    // Validate minimum withdrawal amount
-    if (amount < 100) {
-      setError('Minimum withdrawal amount is ₹100');
-      return;
-    }
-    
-    // Validate UPI ID
-    if (!upiId.trim() || !isValidUpiId(upiId.trim())) {
-      setError('Please enter a valid UPI ID (e.g. username@provider)');
-      return;
-    }
-    
-    // Check if user has enough balance
-    if (amount > (realMoneyBalance || 0)) {
-      setError('Insufficient balance');
+    if (!validData) {
+      // The validator will show toast errors, but we also want to set local error state
+      const upiValidation = validateUpiId(upiId.trim());
+      if (!upiValidation.isValid) {
+        setError(upiValidation.message);
+      } else {
+        setError('Please check your withdrawal details');
+      }
       return;
     }
     
@@ -88,7 +79,6 @@ export const WithdrawalForm: React.FC = () => {
       }
     } catch (err: any) {
       setError(err.message || 'Failed to submit withdrawal request. Please try again.');
-      toast.error('Withdrawal request failed. Please try again.');
     } finally {
       setLoading(false);
     }

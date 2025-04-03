@@ -3,7 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "../firebase";
 import toast from "react-hot-toast";
-import { logger } from "../utils/logger";
+import { logger, createLogger } from '../utils/logger'
+// Create a component-specific logger
+const ForgotPasswordLogger = createLogger('ForgotPassword');
+;
 
 const ForgotPassword = (): JSX.Element => {
   const navigate = useNavigate();
@@ -16,14 +19,14 @@ const ForgotPassword = (): JSX.Element => {
     setLoading(true);
     
     try {
-      logger.info('ForgotPassword', 'Sending password reset email', { email });
+      ForgotPasswordLogger.info('Sending password reset email', { email });
       await sendPasswordResetEmail(auth, email);
-      logger.info('ForgotPassword', 'Password reset email sent', { email });
+      ForgotPasswordLogger.info('Password reset email sent', { email });
       setResetSent(true);
       toast.success("Password reset email sent! Check your inbox.");
     } catch (error) {
       const err = error as Error;
-      logger.error('ForgotPassword', 'Error sending reset email', { error: err, email });
+      ForgotPasswordLogger.error('Error sending reset email', { error: err, email });
       toast.error(err.message || "Failed to send reset email. Please try again.");
     } finally {
       setLoading(false);

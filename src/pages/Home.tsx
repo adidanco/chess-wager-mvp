@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { toast } from "react-hot-toast"
-import { logger } from "../utils/logger"
+import { logger, createLogger } from '../utils/logger'
+// Create a component-specific logger
+const HomeLogger = createLogger('Home');
+
 import { sendEmailVerification, User } from "firebase/auth"
 import { auth, db } from "../firebase"
 import { doc, updateDoc } from "firebase/firestore"
@@ -34,7 +37,7 @@ export default function Home(): JSX.Element {
 
   useEffect(() => {
     if (!isAuthenticated && !loading) {
-      logger.warn('Home', 'User not authenticated, redirecting to login')
+      HomeLogger.warn('User not authenticated, redirecting to login')
       navigate("/login")
     }
   }, [isAuthenticated, loading, navigate])
@@ -47,11 +50,11 @@ export default function Home(): JSX.Element {
     try {
       await sendEmailVerification(currentUser as User)
       toast.success(`Verification email sent! For demo, use code: ${DEMO_CODE}`)
-      logger.info('Home', 'Verification email sent', { email: currentUser.email })
+      HomeLogger.info('Verification email sent', { email: currentUser.email })
       setShowVerificationInput(true)
     } catch (error) {
       const err = error as Error
-      logger.error('Home', 'Failed to send verification email', { error: err })
+      HomeLogger.error('Failed to send verification email', { error: err })
       toast.error("Failed to send verification email. Please try again later.")
     } finally {
       setVerificationSending(false)
@@ -79,14 +82,14 @@ export default function Home(): JSX.Element {
           updatedAt: new Date()
         })
         
-        logger.info('Home', 'Email verified in Firestore', { userId: currentUser.uid })
+        HomeLogger.info('Email verified in Firestore', { userId: currentUser.uid })
       }
       
       // Force refresh the user to get updated emailVerified status
       await (currentUser as User).reload()
       
       toast.success("Email verified successfully!")
-      logger.info('Home', 'Email verified', { userId: currentUser.uid })
+      HomeLogger.info('Email verified', { userId: currentUser.uid })
       
       // Reset UI state
       setShowVerificationInput(false)
@@ -96,7 +99,7 @@ export default function Home(): JSX.Element {
       window.location.reload()
     } catch (error) {
       const err = error as Error
-      logger.error('Home', 'Email verification failed', { error: err })
+      HomeLogger.error('Email verification failed', { error: err })
       toast.error("Failed to verify email. Please try again.")
     } finally {
       setVerifying(false)
@@ -117,7 +120,7 @@ export default function Home(): JSX.Element {
       await logout();
     } catch (error) {
       const err = error as Error;
-      logger.error('Home', 'Logout failed', { error: err });
+      HomeLogger.error('Logout failed', { error: err });
     }
   };
 
@@ -256,7 +259,7 @@ export default function Home(): JSX.Element {
         
         {/* Balance display */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <BalanceDisplay balance={balance} />
+          <BalanceDisplay />
         </div>
         
         {/* Game action buttons */}

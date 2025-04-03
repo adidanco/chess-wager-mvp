@@ -4,6 +4,7 @@ import { confirmDeposit, createOrder, verifyPayment } from '../../services/trans
 import { useAuth } from '../../hooks/useAuth';
 import { toast } from 'react-hot-toast';
 import { razorpayConfig } from '../../firebaseConfig';
+import { validatePaymentAmount, validatePaymentData } from '../../utils/validator';
 
 // Define Razorpay interface for TypeScript
 declare global {
@@ -38,6 +39,7 @@ export const DepositForm: React.FC = () => {
   const handleAmountSelect = (value: number) => {
     setAmount(value);
     setCustomAmount('');
+    setError(null);
   };
 
   // Handle custom amount input
@@ -47,13 +49,16 @@ export const DepositForm: React.FC = () => {
     if (/^\d*$/.test(value)) {
       setCustomAmount(value);
       setAmount(value ? parseInt(value, 10) : 0);
+      setError(null);
     }
   };
 
   // Handle proceed to payment
   const handleProceedToPayment = async () => {
-    if (amount < 100) {
-      setError('Minimum deposit amount is ₹100');
+    // Validate amount using our new validator
+    const validation = validatePaymentAmount(amount);
+    if (!validation.isValid) {
+      setError(validation.message);
       return;
     }
     
@@ -103,7 +108,6 @@ export const DepositForm: React.FC = () => {
     } catch (err: any) {
       setLoading(false);
       setError(err.message || 'Failed to process payment. Please try again.');
-      toast.error('Payment initialization failed. Please try again.');
     }
   };
 

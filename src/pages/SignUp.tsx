@@ -4,7 +4,10 @@ import { createUserWithEmailAndPassword, AuthError, sendEmailVerification } from
 import { doc, setDoc, serverTimestamp } from "firebase/firestore"
 import { auth, db } from "../firebase"
 import toast from "react-hot-toast"
-import { logger } from "../utils/logger"
+import { logger, createLogger } from '../utils/logger'
+// Create a component-specific logger
+const SignUpLogger = createLogger('SignUp');
+
 import { createNewPlayerRating } from "../utils/ratingSystem"
 
 export default function SignUp(): JSX.Element {
@@ -17,14 +20,14 @@ export default function SignUp(): JSX.Element {
   const handleSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault()
     setLoading(true)
-    logger.info('SignUp', 'Attempting signup', { email, username })
+    SignUpLogger.info('Attempting signup', { email, username })
 
     try {
       // Create user in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(auth, email, password)
       const user = userCredential.user;
       
-      logger.debug('SignUp', 'Auth user created', { 
+      SignUpLogger.debug('Auth user created', { 
         userId: user.uid,
         email 
       })
@@ -59,7 +62,7 @@ export default function SignUp(): JSX.Element {
         updatedAt: serverTimestamp()
       })
 
-      logger.info('SignUp', 'Signup successful', { 
+      SignUpLogger.info('Signup successful', { 
         userId: user.uid,
         email,
         username,
@@ -70,7 +73,7 @@ export default function SignUp(): JSX.Element {
       navigate("/login")
     } catch (error) {
       const err = error as AuthError
-      logger.error('SignUp', 'Signup failed', { 
+      SignUpLogger.error('Signup failed', { 
         error: err, 
         errorCode: err.code,
         email,

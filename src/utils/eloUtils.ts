@@ -5,7 +5,10 @@
  * The ELO rating system is a method for calculating the relative skill levels of players.
  */
 
-import { logger } from './logger';
+import { logger, createLogger } from './logger'
+// Create a component-specific logger
+const eloUtilsLogger = createLogger('eloUtils');
+;
 
 // Default constants for ELO calculations
 const DEFAULT_K_FACTOR = 32; // Standard K-factor for regular players
@@ -50,7 +53,7 @@ export const calculateNewRating = (
   // Round to nearest integer and ensure rating is never negative
   const newRating = Math.max(0, Math.round(currentRating + ratingChange));
   
-  logger.info('ELO', 'Rating calculation', {
+  eloUtilsLogger.info('Rating calculation', {
     currentRating,
     opponentRating,
     expectedScore,

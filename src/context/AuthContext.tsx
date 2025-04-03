@@ -10,9 +10,13 @@ import {
   serverTimestamp, 
   onSnapshot,
   DocumentReference,
-  Unsubscribe 
+  Unsubscribe,
+  collection
 } from 'firebase/firestore'
-import { logger } from '../utils/logger'
+import { logger, createLogger } from '../utils/logger'
+// Create a component-specific logger
+const AuthContextLogger = createLogger('AuthContext');
+
 import toast from 'react-hot-toast'
 import { UserProfile, UserStats, AuthContextType } from 'chessTypes'
 
@@ -52,12 +56,12 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
-        logger.info('Auth', 'User authenticated', { userId: user.uid })
+        AuthContextLogger.info('User authenticated', { userId: user.uid })
         setCurrentUser(user)
         // Subscribe to user profile when authenticated
         subscribeToUserProfile(user.uid)
       } else {
-        logger.info('Auth', 'User signed out')
+        AuthContextLogger.info('User signed out')
         setCurrentUser(null)
         setUserProfile(null)
         
@@ -87,19 +91,19 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
             id: doc.id
           } as UserProfile
           setUserProfile(data)
-          logger.info('Auth', 'User profile updated', { 
+          AuthContextLogger.info('User profile updated', { 
             userId,
             balance: data.balance,
             username: data.username 
           })
         } else {
-          logger.error('Auth', 'User document does not exist', { userId })
+          AuthContextLogger.error('User document does not exist', { userId })
           toast.error("User profile not found. Please contact support.")
         }
         setProfileLoading(false)
       },
       (error) => {
-        logger.error('Auth', 'Error fetching user profile', { error, userId })
+        AuthContextLogger.error('Error fetching user profile', { error, userId })
         toast.error("Failed to load profile data")
         setProfileLoading(false)
       }
@@ -109,60 +113,77 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
   }
 
   // Update user balance safely with transaction
-  const updateBalance = async (amount: number, reason = "manual adjustment"): Promise<boolean> => {
-    if (!currentUser) {
-      logger.error('Auth', 'Cannot update balance: Not authenticated')
-      throw new Error("You must be logged in to update balance")
-    }
-    
-    const userId = currentUser.uid
-    logger.info('Auth', 'Updating user balance', { userId, amount, reason })
-    
-    setBalanceUpdating(true)
-    
+  const updateBalance = async (
+    amount: number, 
+    reason: string, 
+    isWinnings: boolean = false
+  ): Promise<boolean> => {
     try {
+      if (!currentUser) {
+        const errorMessage = 'User must be logged in to update balance';
+        logger.error(errorMessage);
+        toast.error(errorMessage);
+        return false;
+      }
+
+      setBalanceUpdating(true);
+      
+      // Get current data to ensure we have the latest balance
+      const userDoc = doc(db, 'users', currentUser.uid);
+      
       await runTransaction(db, async (transaction) => {
-        const userRef = doc(db, "users", userId)
-        const userSnap = await transaction.get(userRef)
+        const currentDoc = await transaction.get(userDoc);
         
-        if (!userSnap.exists()) {
-          throw new Error("User not found")
+        if (!currentDoc.exists()) {
+          throw new Error('User document does not exist');
         }
         
-        const userData = userSnap.data()
-        const newBalance = (userData.balance || 0) + amount
+        const userData = currentDoc.data() as UserProfile;
+        const currentBalance = userData.realMoneyBalance || 0;
+        const currentWithdrawable = userData.withdrawableAmount || 0;
         
-        if (newBalance < 0) {
-          throw new Error("Insufficient balance")
-        }
+        // Calculate new balances, ensure they don't go below 0
+        const newBalance = Math.max(0, currentBalance + amount);
         
-        transaction.update(userRef, {
-          balance: newBalance,
-          updatedAt: serverTimestamp(),
-          [`transactions.${Date.now()}`]: {
-            amount,
-            reason,
-            timestamp: serverTimestamp()
-          }
-        })
-      })
+        // If this is winnings, add to withdrawable amount
+        const newWithdrawable = isWinnings 
+          ? Math.max(0, currentWithdrawable + amount) 
+          : currentWithdrawable;
+        
+        // Update the user doc with new balance and withdrawable amount
+        transaction.update(userDoc, {
+          realMoneyBalance: newBalance,
+          withdrawableAmount: newWithdrawable,
+          updatedAt: serverTimestamp()
+        });
+        
+        // Log the transaction for record-keeping
+        const transactionRef = doc(collection(db, 'transactions'));
+        transaction.set(transactionRef, {
+          userId: currentUser.uid,
+          type: amount > 0 
+            ? (isWinnings ? 'game_winnings' : 'deposit') 
+            : (isWinnings ? 'withdraw_winnings' : 'withdraw'),
+          amount: Math.abs(amount),
+          status: 'completed',
+          timestamp: serverTimestamp(),
+          notes: reason
+        });
+      });
       
-      logger.info('Auth', 'Balance updated successfully', { 
-        userId, 
-        amount, 
-        reason 
-      })
+      logger.info('Balance updated successfully', { amount, reason, isWinnings });
       
-      return true
+      // No need for toast here; let the calling component handle user feedback
+      return true;
     } catch (error) {
-      const err = error as Error
-      logger.error('Auth', 'Error updating balance', { error: err, userId, amount })
-      toast.error(err.message || "Failed to update balance")
-      throw error
+      const err = error as Error;
+      logger.error('Error updating balance', { error: err });
+      toast.error(err.message || 'Error updating balance');
+      return false;
     } finally {
-      setBalanceUpdating(false)
+      setBalanceUpdating(false);
     }
-  }
+  };
 
   // Update user profile data
   const updateProfile = async (updates: Partial<UserProfile>): Promise<boolean> => {
@@ -172,7 +193,7 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
     }
     
     const userId = currentUser.uid
-    logger.info('Auth', 'Updating user profile', { userId, updates })
+    AuthContextLogger.info('Updating user profile', { userId, updates })
     
     try {
       const userRef = doc(db, "users", userId)
@@ -181,12 +202,12 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
         updatedAt: serverTimestamp()
       })
       
-      logger.info('Auth', 'Profile updated successfully', { userId })
+      AuthContextLogger.info('Profile updated successfully', { userId })
       toast.success("Profile updated successfully")
       return true
     } catch (error) {
       const err = error as Error
-      logger.error('Auth', 'Error updating profile', { error: err, userId })
+      AuthContextLogger.error('Error updating profile', { error: err, userId })
       toast.error("Failed to update profile")
       return false
     }
@@ -194,7 +215,7 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
 
   // Logout function
   const logout = async (): Promise<void> => {
-    logger.info('Auth', 'Attempting sign out')
+    AuthContextLogger.info('Attempting sign out')
     try {
       await signOut(auth)
       // Clear local state immediately
@@ -204,11 +225,11 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
         unsubscribeProfile()
         setUnsubscribeProfile(null)
       }
-      logger.info('Auth', 'Sign out successful')
+      AuthContextLogger.info('Sign out successful')
       toast.success("Logged out successfully")
     } catch (error) {
       const err = error as Error
-      logger.error('Auth', 'Sign out failed', { error: err })
+      AuthContextLogger.error('Sign out failed', { error: err })
       toast.error("Logout failed. Please try again.")
       throw error // Re-throw for potential handling elsewhere
     }
@@ -230,6 +251,7 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
     isAuthenticated: !!currentUser,
     balance: userProfile?.balance || 0,
     realMoneyBalance: userProfile?.realMoneyBalance || 0,
+    withdrawableAmount: userProfile?.withdrawableAmount || 0,
     pendingWithdrawalAmount: userProfile?.pendingWithdrawalAmount || 0,
     username: userProfile?.username || 'User',
     // Stats (if available in user profile)

@@ -15,7 +15,10 @@ import {
 import { db } from "../firebase";
 import { GAME_STATUS, PLAYER_COLORS, DEFAULT_TIMER, PlayerColor, GameStatus } from "../utils/constants";
 import toast from "react-hot-toast";
-import { logger } from "../utils/logger";
+import { logger, createLogger } from '../utils/logger'
+// Create a component-specific logger
+const useChessGameLogger = createLogger('useChessGame');
+;
 import useChessClock from "./useChessClock";
 import { NavigateFunction } from "react-router-dom";
 import { GameData } from "chessTypes";
@@ -121,18 +124,18 @@ const useChessGame = (
   const stopClock = useCallback((): void => {
     stopClockInternal();
     activeClockSideRef.current = null; // Reset active side when stopped
-    logger.debug('useChessGame', 'Clock stopped');
+    useChessGameLogger.debug('Clock stopped');
   }, [stopClockInternal]);
 
   // Stable callback for handleTimeUp
   const handleTimeUp = useCallback(async (winner: PlayerColor): Promise<void> => {
     stopClock(); // Ensure clock is stopped
     const currentData = gameDataRef.current; // Use ref for latest data
-    logger.info('useChessGame', 'Time up!', { winner, gameId });
+    useChessGameLogger.info('Time up!', { winner, gameId });
     try {
       // Added check: Only proceed if game was actually in progress
       if (!currentData || currentData.status !== GAME_STATUS.IN_PROGRESS) {
-          logger.warn('useChessGame', 'handleTimeUp called but game not in progress', { status: currentData?.status });
+          useChessGameLogger.warn('handleTimeUp called but game not in progress', { status: currentData?.status });
           return;
       }
 
@@ -171,14 +174,14 @@ const useChessGame = (
               );
               
               if (payoutResult) {
-                logger.info('useChessGame', 'Payout processed successfully on time up', { 
+                useChessGameLogger.info('Payout processed successfully on time up', { 
                   gameId, 
                   winnerId, 
                   amount: wager,
                   useRealMoney: currentData.useRealMoney
                 });
               } else {
-                logger.error('useChessGame', 'Failed to process payout on time up', { 
+                useChessGameLogger.error('Failed to process payout on time up', { 
                   gameId, 
                   winnerId,
                   loserId,
@@ -186,7 +189,7 @@ const useChessGame = (
                 });
               }
             } catch (err) {
-              logger.error('useChessGame', 'Error processing payout on time up', { err, gameId, winnerId });
+              useChessGameLogger.error('Error processing payout on time up', { err, gameId, winnerId });
             }
              
             // Update player ratings
@@ -201,13 +204,13 @@ const useChessGame = (
                 currentData.blackPlayer,
                 resultFromWhitePerspective
               );
-              logger.info('useChessGame', 'Ratings updated for time loss', { 
+              useChessGameLogger.info('Ratings updated for time loss', { 
                 gameId,
                 winner,
                 loser: loserSide
               });
             } catch (error) {
-              logger.error('useChessGame', 'Failed to update ratings for time loss', { 
+              useChessGameLogger.error('Failed to update ratings for time loss', { 
                 error,
                 gameId,
                 winner,
@@ -215,7 +218,7 @@ const useChessGame = (
               });
             }
          } else {
-             logger.error('useChessGame', 'Missing player ID or zero wager for payout on time up', { winnerId, loserId, wager });
+             useChessGameLogger.error('Missing player ID or zero wager for payout on time up', { winnerId, loserId, wager });
          }
       }
 
@@ -224,7 +227,7 @@ const useChessGame = (
       toast.success(winner === playerColor ? "You won on time!" : "You lost on time!");
 
     } catch (error) {
-      logger.error('useChessGame', 'Error updating game status for time up', { error, gameId });
+      useChessGameLogger.error('Error updating game status for time up', { error, gameId });
       toast.error("Error updating game status!");
     }
     // Removed setGameData from dependencies - relies on gameDataRef
@@ -237,7 +240,7 @@ const useChessGame = (
        return; // Don't restart if already running for the correct side
     }
     stopClock(); // Stop any existing clock first
-    logger.debug('useChessGame', `Starting clock for side: ${side}`);
+    useChessGameLogger.debug(`Starting clock for side: ${side}`);
     startClockInternal(side, handleTimeUp); // Pass the stable handleTimeUp
     activeClockSideRef.current = side;
    }, [stopClock, startClockInternal, handleTimeUp]);
@@ -247,7 +250,7 @@ const useChessGame = (
     const currentData = gameDataRef.current; // Use ref
     // Check status using the ref
     if (!currentData || currentData.status !== GAME_STATUS.IN_PROGRESS || !chessRef.current) {
-        logger.warn('handleMove', 'Move attempt while game not in progress or ready', { status: currentData?.status });
+        useChessGameLogger.warn('Move attempt while game not in progress or ready', { status: currentData?.status });
         return false;
     }
 
@@ -335,7 +338,7 @@ const useChessGame = (
 
       // Perform Firestore update
       await updateDoc(gameRef, updateData);
-      logger.info('useChessGame', 'Move successful, updated Firestore', { gameId, newTurn });
+      useChessGameLogger.info('Move successful, updated Firestore', { gameId, newTurn });
 
       // Process end of game if needed
       if (gameEnded) {
@@ -360,14 +363,14 @@ const useChessGame = (
                 resultFromWhitePerspective
               );
             }
-            logger.info('useChessGame', 'Ratings updated for game end', { 
+            useChessGameLogger.info('Ratings updated for game end', { 
               gameId, 
               isDraw, 
               isCheckmate,
               winner
             });
           } catch (error) {
-            logger.error('useChessGame', 'Error updating ratings', { error, gameId });
+            useChessGameLogger.error('Error updating ratings', { error, gameId });
           }
 
           // Handle wager payouts if there is a wager
@@ -393,7 +396,7 @@ const useChessGame = (
               );
               
               if (payoutResult) {
-                logger.info('useChessGame', 'Payout processed successfully', { 
+                useChessGameLogger.info('Payout processed successfully', { 
                   gameId, 
                   isDraw, 
                   winnerId, 
@@ -401,7 +404,7 @@ const useChessGame = (
                   useRealMoney: currentData.useRealMoney
                 });
               } else {
-                logger.error('useChessGame', 'Failed to process payout', { 
+                useChessGameLogger.error('Failed to process payout', { 
                   gameId, 
                   isDraw, 
                   winnerId,
@@ -409,7 +412,7 @@ const useChessGame = (
                 });
               }
             } catch (error) {
-              logger.error('useChessGame', 'Error processing payout', { error, gameId });
+              useChessGameLogger.error('Error processing payout', { error, gameId });
             }
           }
         }
@@ -433,7 +436,7 @@ const useChessGame = (
       return true; // Move successful
 
     } catch (error) {
-        logger.error('useChessGame', 'Error making move', { error, gameId });
+        useChessGameLogger.error('Error making move', { error, gameId });
 
         // Revert optimistic UI changes if Firestore update fails
         if (chessRef.current && result) {
@@ -457,12 +460,12 @@ const useChessGame = (
   useEffect(() => {
     if (!gameId || !userId) return;
 
-    logger.info('useChessGame', 'Setting up Firestore subscription', { gameId, userId });
+    useChessGameLogger.info('Setting up Firestore subscription', { gameId, userId });
     const gameRef = doc(db, "games", gameId);
 
     const unsubscribe = onSnapshot(gameRef, (snapshot) => {
       if (!snapshot.exists()) {
-        logger.error('useChessGame', 'Game document does not exist!', { gameId });
+        useChessGameLogger.error('Game document does not exist!', { gameId });
         toast.error("Game not found or deleted!");
         stopClock(); 
         navigate("/");
@@ -482,7 +485,7 @@ const useChessGame = (
           chessRef.current.load(newData.fen);
           setFen(newData.fen);
         } catch (err) { 
-             logger.error('useChessGame', 'Error loading FEN from snapshot', { err, gameId, fen: newData.fen });
+             useChessGameLogger.error('Error loading FEN from snapshot', { err, gameId, fen: newData.fen });
              toast.error("Error loading game position!");
         }
       }
@@ -508,7 +511,7 @@ const useChessGame = (
       }
 
       if (!gameIsActive) {
-        // logger.debug('useChessGame', 'Game not active, stopping clock', { status: newData.status });
+        // useChessGameLogger.debug('Game not active, stopping clock', { status: newData.status });
         stopClock();
         return; // Stop if not in progress or players missing
       }
@@ -524,7 +527,7 @@ const useChessGame = (
         elapsed = Math.max(0, now - lastMoveMillis);
       } else if (newData.lastMoveTime) {
         // Log warning if lastMoveTime exists but isn't a Timestamp
-        logger.warn('useChessGame', 'lastMoveTime is not a Firestore Timestamp in active game', { lastMoveTime: newData.lastMoveTime });
+        useChessGameLogger.warn('lastMoveTime is not a Firestore Timestamp in active game', { lastMoveTime: newData.lastMoveTime });
       }
 
       let targetWhiteTime = docWhiteTime;
@@ -542,7 +545,7 @@ const useChessGame = (
            // White's time remains as it was in the document
       }
 
-      // logger.debug('useChessGame', 'Snapshot - Active Game Clock Sync', {
+      // useChessGameLogger.debug('Snapshot - Active Game Clock Sync', {
       //   newDataTurn: newData.currentTurn, elapsed, docWhiteTime, docBlackTime, targetWhiteTime, targetBlackTime, activeClockSide: activeClockSideRef.current
       // });
 
@@ -555,7 +558,7 @@ const useChessGame = (
       }
 
     }, (error) => { 
-        logger.error('useChessGame', 'Firestore snapshot error', { error, gameId });
+        useChessGameLogger.error('Firestore snapshot error', { error, gameId });
         setError('Error fetching game updates.');
         toast.error('Connection error. Please check your network.');
         stopClock();
@@ -563,7 +566,7 @@ const useChessGame = (
 
     // Cleanup function
     return () => {
-      logger.info('useChessGame', 'Cleaning up Firestore subscription', { gameId });
+      useChessGameLogger.info('Cleaning up Firestore subscription', { gameId });
       unsubscribe();
       stopClock(); 
     };

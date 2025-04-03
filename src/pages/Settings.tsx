@@ -1,7 +1,10 @@
 import React, { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-hot-toast";
-import { logger } from "../utils/logger";
+import { logger, createLogger } from '../utils/logger'
+// Create a component-specific logger
+const SettingsLogger = createLogger('Settings');
+;
 import LoadingSpinner from "../components/common/LoadingSpinner";
 import PageLayout from "../components/common/PageLayout";
 import { useAuth } from "../context/AuthContext";
@@ -19,7 +22,7 @@ const Settings = (): JSX.Element => {
 
   useEffect(() => {
     if (!isAuthenticated && !loading) {
-      logger.warn('Settings', 'User not authenticated, redirecting to login');
+      SettingsLogger.warn('User not authenticated, redirecting to login');
       navigate("/login");
     }
   }, [isAuthenticated, loading, navigate]);
@@ -30,7 +33,7 @@ const Settings = (): JSX.Element => {
       navigate("/login");
     } catch (error) {
       const err = error as Error;
-      logger.error('Settings', 'Logout failed', { error: err });
+      SettingsLogger.error('Logout failed', { error: err });
       toast.error("Failed to logout. Please try again.");
     }
   };

@@ -1,5 +1,8 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { logger } from '../utils/logger';
+import { logger, createLogger } from '../utils/logger'
+// Create a component-specific logger
+const GameContextLogger = createLogger('GameContext');
+;
 import { GameData } from 'chessTypes';
 
 interface GameContextValue {
@@ -24,7 +27,7 @@ export function GameProvider({ children }: GameProviderProps): JSX.Element {
   const [error, setError] = useState<Error | string | null>(null);
 
   const updateGame = (game: GameData | null): void => {
-    logger.info('GameContext', 'Updating game state', { gameId: game?.id });
+    GameContextLogger.info('Updating game state', { gameId: game?.id });
     setCurrentGame(game);
   };
 
@@ -33,12 +36,12 @@ export function GameProvider({ children }: GameProviderProps): JSX.Element {
   };
 
   const setGameError = (error: Error | string): void => {
-    logger.error('GameContext', 'Game error', { error });
+    GameContextLogger.error('Game error', { error });
     setError(error);
   };
 
   const clearGame = (): void => {
-    logger.info('GameContext', 'Clearing game state');
+    GameContextLogger.info('Clearing game state');
     setCurrentGame(null);
     setError(null);
   };

@@ -2,10 +2,14 @@ import React from "react";
 import { doc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../../firebase";
 import toast from "react-hot-toast";
-import { logger } from "../../utils/logger";
+import { logger, createLogger } from '../../utils/logger'
+// Create a component-specific logger
+const GameActionButtonsLogger = createLogger('GameActionButtons');
+;
 import { GAME_STATUS, PLAYER_COLORS, GameStatus, PlayerColor } from "../../utils/constants";
 import { NavigateFunction } from "react-router-dom";
 import { GameData } from "chessTypes";
+import { processGameEnd } from "../../services/wagerService";
 
 /**
  * Interface for GameActionButtons props
@@ -28,7 +32,7 @@ const GameActionButtons = ({
   navigate,
   gameStatus
 }: GameActionButtonsProps): JSX.Element => {
-  const isCreator = gameData?.whitePlayer === userId;
+  const isCreator = gameData?.player1Id === userId;
   const userColor = userId === gameData?.whitePlayer ? PLAYER_COLORS.WHITE : PLAYER_COLORS.BLACK;
 
   const handleCancelGame = async (): Promise<void> => {
@@ -42,7 +46,7 @@ const GameActionButtons = ({
       navigate("/");
     } catch (error) {
       const err = error as Error;
-      logger.error('Game', 'Error cancelling game', { error: err, gameId });
+      GameActionButtonsLogger.error('Error cancelling game', { error: err, gameId });
       toast.error("Error cancelling game!");
     }
   };
@@ -57,32 +61,141 @@ const GameActionButtons = ({
         throw new Error("Players not found");
       }
       
+      GameActionButtonsLogger.info('Offering draw', { 
+        gameId, 
+        userId, 
+        gameData: {
+          whitePlayer: gameData.whitePlayer,
+          blackPlayer: gameData.blackPlayer,
+          player1Id: gameData.player1Id,
+          player2Id: gameData.player2Id
+        }
+      });
+      
       const gameRef = doc(db, "games", gameId);
       await updateDoc(gameRef, {
         status: GAME_STATUS.FINISHED,
         winner: "draw",
-        endTime: serverTimestamp()
+        endTime: serverTimestamp(),
+        payoutAttempted: true
       });
 
-      // Refund wagers for draw
-      const whiteUserRef = doc(db, "users", gameData.whitePlayer);
-      const blackUserRef = doc(db, "users", gameData.blackPlayer);
-      const [whiteSnap, blackSnap] = await Promise.all([
-        getDoc(whiteUserRef),
-        getDoc(blackUserRef)
-      ]);
+      // Process game end with draw
+      const wager = gameData.wager || 0;
+      const useRealMoney = gameData.useRealMoney || true;
       
-      if (whiteSnap.exists()) {
-        const whiteData = whiteSnap.data();
-        await updateDoc(whiteUserRef, {
-          balance: (whiteData.balance || 0) + (gameData.wager || 0)
+      // Get player balances before payouts
+      const player1Id = gameData.player1Id;
+      const player2Id = gameData.player2Id;
+      
+      if (!player1Id || !player2Id) {
+        GameActionButtonsLogger.error('Missing player IDs for draw payout', { 
+          gameId,
+          player1Id,
+          player2Id
         });
+        toast.error("Game ended in a draw but there was an issue with player identification.");
+        navigate("/");
+        return;
       }
       
-      if (blackSnap.exists()) {
-        const blackData = blackSnap.data();
-        await updateDoc(blackUserRef, {
-          balance: (blackData.balance || 0) + (gameData.wager || 0)
+      try {
+        // Get player balances before payout
+        const player1Ref = doc(db, "users", player1Id);
+        const player2Ref = doc(db, "users", player2Id);
+        const [player1Doc, player2Doc] = await Promise.all([
+          getDoc(player1Ref),
+          getDoc(player2Ref)
+        ]);
+        
+        const player1PreBal = player1Doc.exists() ? (player1Doc.data().realMoneyBalance || 0) : 0;
+        const player2PreBal = player2Doc.exists() ? (player2Doc.data().realMoneyBalance || 0) : 0;
+        
+        GameActionButtonsLogger.info('Processing draw payout', { 
+          gameId,
+          player1Id,
+          player2Id,
+          wager,
+          useRealMoney,
+          player1BalanceBefore: player1PreBal,
+          player2BalanceBefore: player2PreBal
+        });
+        
+        const result = await processGameEnd(
+          gameId,
+          null, // No winner for a draw
+          null, // No loser for a draw
+          true, // It's a draw
+          wager,
+          useRealMoney
+        );
+        
+        if (result) {
+          // Verify balances were updated
+          const [player1DocAfter, player2DocAfter] = await Promise.all([
+            getDoc(player1Ref),
+            getDoc(player2Ref)
+          ]);
+          
+          const player1PostBal = player1DocAfter.exists() ? (player1DocAfter.data().realMoneyBalance || 0) : 0;
+          const player2PostBal = player2DocAfter.exists() ? (player2DocAfter.data().realMoneyBalance || 0) : 0;
+          
+          GameActionButtonsLogger.info('Draw payout processed', {
+            gameId,
+            player1BalanceBefore: player1PreBal,
+            player1BalanceAfter: player1PostBal,
+            player1Increase: player1PostBal - player1PreBal,
+            player2BalanceBefore: player2PreBal,
+            player2BalanceAfter: player2PostBal,
+            player2Increase: player2PostBal - player2PreBal
+          });
+          
+          if (player1PostBal <= player1PreBal || player2PostBal <= player2PreBal) {
+            // Balances didn't increase, something went wrong
+            GameActionButtonsLogger.warn('Draw: player balances not updated correctly', {
+              gameId,
+              player1BalanceBefore: player1PreBal,
+              player1BalanceAfter: player1PostBal,
+              player2BalanceBefore: player2PreBal,
+              player2BalanceAfter: player2PostBal
+            });
+            
+            // Mark for further review
+            await updateDoc(gameRef, {
+              payoutProcessed: false,
+              needsPayout: true,
+              player1BalanceBefore: player1PreBal,
+              player2BalanceBefore: player2PreBal
+            });
+          }
+        } else {
+          GameActionButtonsLogger.error('Failed to process draw payout', {
+            gameId,
+            player1Id,
+            player2Id,
+            wager
+          });
+          
+          // Mark for further review
+          await updateDoc(gameRef, {
+            payoutProcessed: false,
+            needsPayout: true,
+            player1BalanceBefore: player1PreBal,
+            player2BalanceBefore: player2PreBal
+          });
+        }
+      } catch (payoutError: any) {
+        GameActionButtonsLogger.error('Error in draw payout', {
+          error: payoutError?.message || payoutError,
+          stack: payoutError?.stack,
+          gameId
+        });
+        
+        // Mark for further review
+        await updateDoc(gameRef, {
+          payoutProcessed: false,
+          needsPayout: true,
+          payoutError: payoutError?.message || "Unknown error"
         });
       }
 
@@ -90,7 +203,11 @@ const GameActionButtons = ({
       navigate("/");
     } catch (error) {
       const err = error as Error;
-      logger.error('Game', 'Error declaring draw', { error: err, gameId });
+      GameActionButtonsLogger.error('Error declaring draw', { 
+        error: err, 
+        stack: err?.stack,
+        gameId 
+      });
       toast.error("Error declaring draw!");
     }
   };
@@ -101,38 +218,143 @@ const GameActionButtons = ({
         throw new Error("Game data is not available");
       }
       
-      if (!gameData.currentTurn) {
-        throw new Error("Current turn not set");
-      }
-      
-      const winner = gameData.currentTurn === PLAYER_COLORS.WHITE ? PLAYER_COLORS.BLACK : PLAYER_COLORS.WHITE;
+      // The winner is the opponent of the player who clicked resign
+      const winner = userColor === PLAYER_COLORS.WHITE ? PLAYER_COLORS.BLACK : PLAYER_COLORS.WHITE;
       const gameRef = doc(db, "games", gameId);
+      
+      GameActionButtonsLogger.info('Player resigning', { 
+        gameId, 
+        userId, 
+        userColor,
+        winnerColor: winner,
+        gameData: {
+          whitePlayer: gameData.whitePlayer,
+          blackPlayer: gameData.blackPlayer,
+          player1Id: gameData.player1Id,
+          player2Id: gameData.player2Id
+        }
+      });
+      
       await updateDoc(gameRef, {
         status: GAME_STATUS.FINISHED,
         winner: winner,
-        endTime: serverTimestamp()
+        endTime: serverTimestamp(),
+        payoutAttempted: true
       });
 
-      // Handle wager distribution for resignation
+      // Process game end with winner/loser
       const winnerId = winner === PLAYER_COLORS.WHITE ? gameData.whitePlayer : gameData.blackPlayer;
+      const loserId = winner === PLAYER_COLORS.WHITE ? gameData.blackPlayer : gameData.whitePlayer;
+      const wager = gameData.wager || 0;
+      const useRealMoney = gameData.useRealMoney || true; // Default to true if undefined
+      
       if (!winnerId) {
-        throw new Error("Winner ID not found");
+        GameActionButtonsLogger.error('Missing winner ID for resignation payout', { 
+          gameId, 
+          winnerColor: winner,
+          whitePlayer: gameData.whitePlayer,
+          blackPlayer: gameData.blackPlayer
+        });
+        toast.error("Game ended. There was an issue identifying the winner.");
+        navigate("/");
+        return;
       }
       
-      const userRef = doc(db, "users", winnerId);
-      const userSnap = await getDoc(userRef);
-      if (userSnap.exists()) {
-        const userData = userSnap.data();
-        await updateDoc(userRef, {
-          balance: (userData.balance || 0) + (gameData.wager || 0) * 2 // Winner gets double the wager
+      try {
+        // Get winner balance before payout
+        const winnerRef = doc(db, "users", winnerId);
+        const winnerDoc = await getDoc(winnerRef);
+        const preBal = winnerDoc.exists() ? (winnerDoc.data().realMoneyBalance || 0) : 0;
+        
+        GameActionButtonsLogger.info('Processing resignation payout', { 
+          gameId,
+          winnerId, 
+          loserId,
+          wager,
+          useRealMoney,
+          winnerBalanceBefore: preBal
+        });
+        
+        const result = await processGameEnd(
+          gameId,
+          winnerId,
+          loserId || null,
+          false, // Not a draw
+          wager,
+          useRealMoney
+        );
+        
+        if (result) {
+          // Verify the payout worked by checking the winner's balance
+          const winnerDocAfter = await getDoc(winnerRef);
+          const postBal = winnerDocAfter.exists() ? (winnerDocAfter.data().realMoneyBalance || 0) : 0;
+          
+          GameActionButtonsLogger.info('Resignation payout processed', {
+            gameId,
+            winnerId,
+            wager,
+            balanceBefore: preBal,
+            balanceAfter: postBal,
+            increase: postBal - preBal
+          });
+          
+          if (postBal <= preBal) {
+            // Balance didn't increase, something went wrong
+            GameActionButtonsLogger.warn('Resignation: winner balance not updated correctly', {
+              gameId,
+              winnerId,
+              balanceBefore: preBal,
+              balanceAfter: postBal
+            });
+            
+            // Mark for further review
+            await updateDoc(gameRef, {
+              payoutProcessed: false,
+              needsPayout: true,
+              winnerBalanceBefore: preBal
+            });
+          }
+        } else {
+          GameActionButtonsLogger.error('Failed to process resignation payout', {
+            gameId,
+            winnerId,
+            loserId,
+            wager
+          });
+          
+          // Mark for further review
+          await updateDoc(gameRef, {
+            payoutProcessed: false,
+            needsPayout: true,
+            winnerBalanceBefore: preBal
+          });
+        }
+      } catch (payoutError: any) {
+        GameActionButtonsLogger.error('Error in resignation payout', {
+          error: payoutError?.message || payoutError,
+          stack: payoutError?.stack,
+          gameId,
+          winnerId,
+          loserId
+        });
+        
+        // Mark for further review
+        await updateDoc(gameRef, {
+          payoutProcessed: false,
+          needsPayout: true,
+          payoutError: payoutError?.message || "Unknown error"
         });
       }
 
-      toast.success("You resigned!");
+      toast.success("You resigned. Your opponent won the game.");
       navigate("/");
     } catch (error) {
       const err = error as Error;
-      logger.error('Game', 'Error resigning', { error: err, gameId });
+      GameActionButtonsLogger.error('Error resigning', { 
+        error: err, 
+        stack: err?.stack,
+        gameId 
+      });
       toast.error("Error resigning!");
     }
   };
@@ -146,32 +368,147 @@ const GameActionButtons = ({
       // The winner is the player who clicked the button
       const winner = userColor;
       const gameRef = doc(db, "games", gameId);
+      
+      GameActionButtonsLogger.info('Declaring win', { 
+        gameId, 
+        userId, 
+        userColor: winner,
+        gameData: {
+          whitePlayer: gameData.whitePlayer,
+          blackPlayer: gameData.blackPlayer,
+          player1Id: gameData.player1Id,
+          player2Id: gameData.player2Id
+        }
+      });
+
+      // First update the game status
       await updateDoc(gameRef, {
         status: GAME_STATUS.FINISHED,
         winner: winner,
-        endTime: serverTimestamp()
+        endTime: serverTimestamp(),
+        payoutAttempted: true // Mark that we're attempting payout
       });
 
-      // Handle wager distribution for win
+      // Process game end with winner/loser
       const winnerId = winner === PLAYER_COLORS.WHITE ? gameData.whitePlayer : gameData.blackPlayer;
+      const loserId = winner === PLAYER_COLORS.WHITE ? gameData.blackPlayer : gameData.whitePlayer;
+      const wager = gameData.wager || 0;
+      const useRealMoney = gameData.useRealMoney || true; // Default to true if undefined
+      
+      // Check if we have the required IDs
       if (!winnerId) {
-        throw new Error("Winner ID not found");
+        GameActionButtonsLogger.error('Missing winner ID for payout', { 
+          gameId, 
+          userColor: winner,
+          whitePlayer: gameData.whitePlayer,
+          blackPlayer: gameData.blackPlayer
+        });
+        toast.error("Error: Could not determine winner ID");
+        navigate("/");
+        return;
       }
       
-      const userRef = doc(db, "users", winnerId);
-      const userSnap = await getDoc(userRef);
-      if (userSnap.exists()) {
-        const userData = userSnap.data();
-        await updateDoc(userRef, {
-          balance: (userData.balance || 0) + (gameData.wager || 0) * 2 // Winner gets double the wager
+      try {
+        GameActionButtonsLogger.info('Processing payout', { 
+          gameId, 
+          winnerId, 
+          loserId,
+          wager,
+          useRealMoney
         });
+        
+        // Get the user balance before payout for validation
+        const winnerRef = doc(db, "users", winnerId);
+        const winnerDoc = await getDoc(winnerRef);
+        const preBal = winnerDoc.exists() ? (winnerDoc.data().realMoneyBalance || 0) : 0;
+        
+        // Process the payout
+        const result = await processGameEnd(
+          gameId,
+          winnerId,
+          loserId || null, // Handle case where loserId might be undefined
+          false, // Not a draw
+          wager,
+          useRealMoney
+        );
+        
+        if (result) {
+          // Verify the balance was actually updated
+          const winnerDocAfter = await getDoc(winnerRef);
+          const postBal = winnerDocAfter.exists() ? (winnerDocAfter.data().realMoneyBalance || 0) : 0;
+          
+          GameActionButtonsLogger.info('Payout processed successfully for declared win', {
+            gameId,
+            winnerId,
+            wager,
+            useRealMoney,
+            balanceBefore: preBal,
+            balanceAfter: postBal
+          });
+          
+          if (postBal > preBal) {
+            toast.success("You won and received your payout!");
+          } else {
+            // Balance didn't change, might be an issue
+            GameActionButtonsLogger.warn('Payout processed but balance not updated', {
+              gameId,
+              winnerId,
+              balanceBefore: preBal,
+              balanceAfter: postBal
+            });
+            toast.success("You won! (Payout will be processed shortly)");
+            
+            // Update the game to ensure it's marked as needing payout
+            await updateDoc(gameRef, {
+              payoutProcessed: false,
+              needsPayout: true,
+              winnerBalanceBefore: preBal
+            });
+          }
+        } else {
+          GameActionButtonsLogger.error('Failed to process payout for declared win', {
+            gameId,
+            winnerId,
+            loserId,
+            wager
+          });
+          
+          // Update the game to ensure it's marked as needing payout
+          await updateDoc(gameRef, {
+            payoutProcessed: false,
+            needsPayout: true,
+            winnerBalanceBefore: preBal
+          });
+          
+          toast.error("You won! Game ended but there was an issue processing the payout. Our team will review this.");
+        }
+      } catch (payoutError: any) {
+        GameActionButtonsLogger.error('Error in processGameEnd', {
+          error: payoutError?.message || payoutError,
+          stack: payoutError?.stack,
+          gameId,
+          winnerId,
+          loserId
+        });
+        
+        // Update the game to ensure it's marked as needing manual payout
+        await updateDoc(gameRef, {
+          payoutProcessed: false,
+          needsPayout: true,
+          payoutError: payoutError?.message || "Unknown error"
+        });
+        
+        toast.error("You won! Game ended but there was an error processing the payout. Our team will review this.");
       }
-
-      toast.success("You won!");
+      
       navigate("/");
-    } catch (error) {
+    } catch (error: any) {
       const err = error as Error;
-      logger.error('Game', 'Error declaring win', { error: err, gameId });
+      GameActionButtonsLogger.error('Error declaring win', { 
+        error: err?.message || err, 
+        stack: err?.stack,
+        gameId 
+      });
       toast.error("Error declaring win!");
     }
   };

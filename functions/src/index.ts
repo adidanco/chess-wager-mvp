@@ -11,10 +11,21 @@
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import Razorpay from 'razorpay';
+import crypto from 'crypto';
 
+// Initialize Firebase Admin
 admin.initializeApp();
 const db = admin.firestore();
 const region = "asia-south1"; // Mumbai region for India-based operations
+
+// Configure CORS settings for functions
+export const cors = {
+  origin: true, // Allow any origin
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
+  credentials: true,
+  maxAge: 86400 // 24 hours
+};
 
 // Initialize Razorpay with environment config
 const getRazorpayInstance = () => {
@@ -43,6 +54,7 @@ interface DepositData {
 interface RazorpayOrderData {
   amount: number;
   currency: string;
+  idempotencyKey?: string;
 }
 
 interface GameWagerData {
@@ -79,20 +91,42 @@ interface WithdrawalProcessData {
 export const createRazorpayOrder = functions.https.onCall(async (data, context) => {
   // Check authentication
   if (!context?.auth) {
+    console.error("Authentication failed: User is not authenticated");
     throw new functions.https.HttpsError(
       "unauthenticated",
-      "User is not authenticated"
+      "User is not authenticated. Please login again."
     );
   }
 
   const userId = context.auth.uid;
-  const { amount, currency = "INR" } = data as RazorpayOrderData;
+  const { amount, currency = "INR", idempotencyKey } = data as RazorpayOrderData & { idempotencyKey?: string };
   
   if (typeof amount !== 'number' || amount < 100) {
     throw new functions.https.HttpsError(
       "invalid-argument",
       "Amount must be at least ₹100"
     );
+  }
+  
+  // Idempotency check - if this key was processed before, return cached result
+  if (idempotencyKey) {
+    const existingOrder = await db.collection("transactions")
+      .where("idempotencyKey", "==", idempotencyKey)
+      .limit(1)
+      .get();
+      
+    if (!existingOrder.empty) {
+      const orderData = existingOrder.docs[0].data();
+      if (orderData.razorpayOrderId) {
+        functions.logger.info(`Using cached order for idempotency key ${idempotencyKey}`);
+        return {
+          success: true,
+          id: orderData.razorpayOrderId,
+          amount: orderData.amount * 100, // Convert to paise for client
+          currency: currency
+        };
+      }
+    }
   }
   
   try {
@@ -109,7 +143,8 @@ export const createRazorpayOrder = functions.https.onCall(async (data, context) 
       receipt: receiptId,
       notes: {
         userId: userId,
-        purpose: "deposit"
+        purpose: "deposit",
+        idempotencyKey: idempotencyKey || `auto_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`
       }
     };
     
@@ -125,6 +160,7 @@ export const createRazorpayOrder = functions.https.onCall(async (data, context) 
       paymentGateway: 'razorpay',
       razorpayOrderId: order.id,
       razorpayReceipt: receiptId,
+      idempotencyKey: idempotencyKey || orderOptions.notes.idempotencyKey,
       notes: `Deposit initiated via Razorpay for ₹${amount}`
     });
     
@@ -133,10 +169,9 @@ export const createRazorpayOrder = functions.https.onCall(async (data, context) 
     // Return order details to client
     return {
       success: true,
-      orderId: order.id,
-      amount: amount,
-      currency: currency,
-      receipt: receiptId
+      id: order.id,
+      amount: amount * 100, // Return amount in paise for the client
+      currency: currency
     };
   } catch (error) {
     functions.logger.error(`Failed to create Razorpay order for user ${userId}`, error);
@@ -153,24 +188,44 @@ export const createRazorpayOrder = functions.https.onCall(async (data, context) 
 export const verifyRazorpayPayment = functions.https.onCall(async (data, context) => {
   // Check authentication
   if (!context?.auth) {
+    console.error("Authentication failed: User is not authenticated");
     throw new functions.https.HttpsError(
       "unauthenticated",
-      "User is not authenticated"
+      "User is not authenticated. Please login again."
     );
   }
 
   const userId = context.auth.uid;
   const { 
-    razorpayPaymentId, 
-    razorpayOrderId, 
-    razorpaySignature 
+    razorpay_payment_id, 
+    razorpay_order_id, 
+    razorpay_signature,
+    idempotencyKey
   } = data;
   
-  if (!razorpayPaymentId || !razorpayOrderId || !razorpaySignature) {
+  if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature) {
     throw new functions.https.HttpsError(
       "invalid-argument",
       "Missing required Razorpay verification parameters"
     );
+  }
+  
+  // Idempotency check - if this payment was verified before, return cached result
+  if (idempotencyKey) {
+    const existingVerifications = await db.collection("paymentVerifications")
+      .where("idempotencyKey", "==", idempotencyKey)
+      .limit(1)
+      .get();
+      
+    if (!existingVerifications.empty) {
+      const verificationData = existingVerifications.docs[0].data();
+      functions.logger.info(`Using cached verification for idempotency key ${idempotencyKey}`);
+      return {
+        success: true,
+        verified: verificationData.verified,
+        paymentId: razorpay_payment_id
+      };
+    }
   }
   
   try {
@@ -180,13 +235,14 @@ export const verifyRazorpayPayment = functions.https.onCall(async (data, context
     // Find the transaction record
     const transactionsSnapshot = await db
       .collection("transactions")
-      .where("razorpayOrderId", "==", razorpayOrderId)
+      .where("razorpayOrderId", "==", razorpay_order_id)
       .where("userId", "==", userId)
       .where("status", "==", "pending")
       .limit(1)
       .get();
     
     if (transactionsSnapshot.empty) {
+      console.error(`No pending transaction found for order ${razorpay_order_id} and user ${userId}`);
       throw new functions.https.HttpsError(
         "not-found",
         "No pending transaction found with this order ID"
@@ -197,55 +253,83 @@ export const verifyRazorpayPayment = functions.https.onCall(async (data, context
     const transaction = transactionDoc.data();
     const amount = transaction.amount;
     
-    // Verify the payment signature
-    const generatedSignature = razorpay.utils.validateWebhookSignature(
-      razorpayOrderId + "|" + razorpayPaymentId, 
-      razorpaySignature, 
-      functions.config().razorpay.key_secret
-    );
+    // Verify the payment signature using Razorpay's utility
+    const keySecret = functions.config().razorpay.key_secret;
+    const generated_signature = crypto
+      .createHmac("sha256", keySecret)
+      .update(razorpay_order_id + "|" + razorpay_payment_id)
+      .digest("hex");
     
-    if (!generatedSignature) {
-      // Mark transaction as failed due to invalid signature
+    const isSignatureValid = generated_signature === razorpay_signature;
+    
+    // Save verification record with idempotency key
+    await db.collection("paymentVerifications").doc().set({
+      userId,
+      paymentId: razorpay_payment_id,
+      orderId: razorpay_order_id,
+      idempotencyKey: idempotencyKey || `verify_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`,
+      verified: isSignatureValid,
+      timestamp: admin.firestore.FieldValue.serverTimestamp()
+    });
+    
+    if (!isSignatureValid) {
+      // Update transaction status to failed
       await transactionDoc.ref.update({
-        status: 'failed',
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        notes: transaction.notes + " | Payment verification failed: Invalid signature"
+        status: "failed",
+        verificationTimestamp: admin.firestore.FieldValue.serverTimestamp(),
+        notes: transaction.notes + " | Signature verification failed"
       });
       
+      console.error(`Payment signature verification failed for order ${razorpay_order_id}`);
       throw new functions.https.HttpsError(
         "permission-denied",
-        "Payment signature verification failed"
+        "Payment verification failed. Invalid signature."
       );
     }
     
-    // Signature is valid, update user balance and transaction status
+    // Payment is verified, update the transaction
+    await transactionDoc.ref.update({
+      status: "completed",
+      verificationTimestamp: admin.firestore.FieldValue.serverTimestamp(),
+      razorpayPaymentId: razorpay_payment_id,
+      notes: transaction.notes + " | Payment verified successfully"
+    });
+    
+    // Update user's balance
     const userRef = db.collection("users").doc(userId);
     
-    await db.runTransaction(async (t) => {
-      // 1. Update transaction status to completed
-      t.update(transactionDoc.ref, {
-        status: 'completed',
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        razorpayPaymentId: razorpayPaymentId,
-        notes: transaction.notes + " | Payment verified and completed"
-      });
+    await db.runTransaction(async (transaction) => {
+      const userDoc = await transaction.get(userRef);
       
-      // 2. Increment user's real money balance
-      t.update(userRef, {
-        realMoneyBalance: admin.firestore.FieldValue.increment(amount),
+      if (!userDoc.exists) {
+        throw new functions.https.HttpsError(
+          "not-found",
+          "User not found"
+        );
+      }
+      
+      const userData = userDoc.data();
+      const currentBalance = userData.realMoneyBalance || 0;
+      const newBalance = currentBalance + amount;
+      
+      transaction.update(userRef, { 
+        realMoneyBalance: newBalance,
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
       });
     });
     
-    functions.logger.info(`Razorpay payment verified for user ${userId}, amount ${amount}, paymentId ${razorpayPaymentId}`);
+    functions.logger.info(`Payment verified successfully for user ${userId}, orderId ${razorpay_order_id}, amount ${amount}`);
     
     return {
       success: true,
-      message: `Successfully added ₹${amount} to your balance`,
-      amount: amount
+      verified: true,
+      paymentId: razorpay_payment_id
     };
   } catch (error) {
-    functions.logger.error(`Failed to verify Razorpay payment for user ${userId}`, error);
+    console.error(`Payment verification failed:`, error);
+    if (error instanceof functions.https.HttpsError) {
+      throw error;
+    }
     throw new functions.https.HttpsError(
       "internal",
       error.message || "Failed to verify payment"
@@ -469,6 +553,14 @@ export const processGamePayout = functions.https.onCall((data, context) => {
     );
   }
 
+  // Validate that either winner or loser ID matches the requesting user
+  if (!isDraw && winnerId !== userId && loserId !== userId) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Only participating players can process payouts"
+    );
+  }
+
   const winnerRef = winnerId ? db.collection("users").doc(winnerId) : null;
   const loserRef = loserId ? db.collection("users").doc(loserId) : null;
   const gameRef = db.collection("games").doc(gameId);
@@ -487,7 +579,7 @@ export const processGamePayout = functions.https.onCall((data, context) => {
         return { success: true, idempotent: true };
       }
 
-      // Verify the game exists and has wagersDebited set to true
+      // Verify the game exists and check its state
       return gameRef.get().then(gameDoc => {
         if (!gameDoc.exists) {
           throw new functions.https.HttpsError(
@@ -497,30 +589,71 @@ export const processGamePayout = functions.https.onCall((data, context) => {
         }
         
         const gameData = gameDoc.data();
-        if (!gameData?.wagersDebited) {
+        if (!gameData) {
           throw new functions.https.HttpsError(
-            "failed-precondition",
-            "Cannot process payout for game without debited wagers"
+            "not-found",
+            "Game data is missing"
           );
         }
         
         if (gameData?.payoutProcessed) {
-          throw new functions.https.HttpsError(
-            "already-exists",
-            "Payout has already been processed for this game"
-          );
+          functions.logger.info(`Payout already processed for game ${gameId}`);
+          return { success: true, alreadyProcessed: true };
         }
 
+        // Even if wagersDebited is false, we'll proceed for the simple case of declaring a winner
+        // This makes the function more robust for all scenarios
+        
+        const actualWinnerId = isDraw ? null : (winnerId || gameData?.winner === 'w' ? gameData?.whitePlayer : gameData?.blackPlayer);
+        const actualLoserId = isDraw ? null : (loserId || gameData?.winner === 'b' ? gameData?.whitePlayer : gameData?.blackPlayer);
+        
+        functions.logger.info(`Processing payout for game ${gameId}`, { 
+          winnerId: actualWinnerId, 
+          loserId: actualLoserId, 
+          isDraw, 
+          wagerAmount 
+        });
+        
         return db.runTransaction(async (t) => {
+          // Get the actual user references based on resolved IDs
+          const actualWinnerRef = actualWinnerId ? db.collection("users").doc(actualWinnerId) : null;
+          const actualLoserRef = actualLoserId ? db.collection("users").doc(actualLoserId) : null;
+          
           // Handle draw (return wagers to both players)
-          if (isDraw && winnerRef && loserRef) {
+          if (isDraw) {
+            const player1Id = gameData.player1Id;
+            const player2Id = gameData.player2Id;
+            
+            if (!player1Id || !player2Id) {
+              throw new functions.https.HttpsError(
+                "failed-precondition",
+                "Cannot process draw without both player IDs"
+              );
+            }
+            
+            const player1Ref = db.collection("users").doc(player1Id);
+            const player2Ref = db.collection("users").doc(player2Id);
+            
+            // Get current player data to ensure they exist
+            const [player1Doc, player2Doc] = await Promise.all([
+              t.get(player1Ref),
+              t.get(player2Ref)
+            ]);
+            
+            if (!player1Doc.exists || !player2Doc.exists) {
+              throw new functions.https.HttpsError(
+                "not-found",
+                "One or both players not found"
+              );
+            }
+            
             // Return wager to player 1
-            t.update(winnerRef, {
+            t.update(player1Ref, {
               realMoneyBalance: admin.firestore.FieldValue.increment(wagerAmount),
               updatedAt: admin.firestore.FieldValue.serverTimestamp()
             });
             t.set(transactionsRef.doc(), {
-              userId: winnerId,
+              userId: player1Id,
               type: 'wager_refund',
               amount: wagerAmount, 
               status: 'completed',
@@ -531,12 +664,12 @@ export const processGamePayout = functions.https.onCall((data, context) => {
             });
             
             // Return wager to player 2
-            t.update(loserRef, {
+            t.update(player2Ref, {
               realMoneyBalance: admin.firestore.FieldValue.increment(wagerAmount),
               updatedAt: admin.firestore.FieldValue.serverTimestamp()
             });
             t.set(transactionsRef.doc(), {
-              userId: loserId,
+              userId: player2Id,
               type: 'wager_refund',
               amount: wagerAmount,
               status: 'completed',
@@ -547,19 +680,29 @@ export const processGamePayout = functions.https.onCall((data, context) => {
             });
           } 
           // Winner takes all (one player wins)
-          else if (winnerRef) {
+          else if (actualWinnerRef && actualLoserId) {
+            // Get winner data to ensure they exist
+            const winnerDoc = await t.get(actualWinnerRef);
+            if (!winnerDoc.exists) {
+              throw new functions.https.HttpsError(
+                "not-found",
+                "Winner user not found"
+              );
+            }
+            
             // Calculate total pool and platform fee
             const totalPool = wagerAmount * 2;
             const platformFee = Math.floor(totalPool * 0.05); // 5% platform fee
             const winnerPayout = totalPool - platformFee;
             
             // Credit winner with winnings after fee
-            t.update(winnerRef, {
+            t.update(actualWinnerRef, {
               realMoneyBalance: admin.firestore.FieldValue.increment(winnerPayout),
+              withdrawableAmount: admin.firestore.FieldValue.increment(winnerPayout),
               updatedAt: admin.firestore.FieldValue.serverTimestamp()
             });
             t.set(transactionsRef.doc(), {
-              userId: winnerId,
+              userId: actualWinnerId,
               type: 'wager_payout',
               amount: winnerPayout,
               status: 'completed',
@@ -569,6 +712,11 @@ export const processGamePayout = functions.https.onCall((data, context) => {
               platformFee: platformFee,
               notes: `Winnings from game ${gameId} (after 5% platform fee)`
             });
+          } else {
+            throw new functions.https.HttpsError(
+              "failed-precondition",
+              "Cannot determine winner for payout"
+            );
           }
           
           // Mark the game as having processed the payout

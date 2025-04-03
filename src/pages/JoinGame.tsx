@@ -15,7 +15,10 @@ import {
 } from "firebase/firestore"
 import { db } from "../firebase"
 import toast from "react-hot-toast"
-import { logger } from "../utils/logger"
+import { logger, createLogger } from '../utils/logger'
+// Create a component-specific logger
+const JoinGameLogger = createLogger('JoinGame');
+
 import { useAuth } from "../context/AuthContext"
 import LoadingSpinner from "../components/common/LoadingSpinner"
 import PageLayout from "../components/common/PageLayout"
@@ -35,7 +38,7 @@ export default function JoinGame(): JSX.Element {
 
   useEffect(() => {
     if (!isAuthenticated) {
-      logger.warn('JoinGame', 'User not authenticated, redirecting to login')
+      JoinGameLogger.warn('User not authenticated, redirecting to login')
       navigate("/login")
       return
     }
@@ -44,7 +47,7 @@ export default function JoinGame(): JSX.Element {
       return
     }
 
-    logger.info('JoinGame', 'Initializing join game component', { 
+    JoinGameLogger.info('Initializing join game component', { 
       userId: currentUser.uid 
     })
 
@@ -54,7 +57,7 @@ export default function JoinGame(): JSX.Element {
       where("status", "==", GAME_STATUS.WAITING)
     )
 
-    logger.debug('JoinGame', 'Setting up games query', { 
+    JoinGameLogger.debug('Setting up games query', { 
       userId: currentUser.uid,
       query: q
     })
@@ -66,7 +69,7 @@ export default function JoinGame(): JSX.Element {
           const gameData = doc.data() as GameData
           // Client-side filter to exclude user's own games
           if (gameData.whitePlayer !== currentUser.uid) {
-            logger.debug('JoinGame', 'Found game', { 
+            JoinGameLogger.debug('Found game', { 
               gameId: doc.id,
               status: gameData.status,
               whitePlayer: gameData.whitePlayer
@@ -74,7 +77,7 @@ export default function JoinGame(): JSX.Element {
             games.push({ id: doc.id, ...gameData })
           }
         })
-        logger.debug('JoinGame', 'Available games updated', { 
+        JoinGameLogger.debug('Available games updated', { 
           count: games.length,
           games: games.map(g => ({ id: g.id, wager: g.wager }))
         })
@@ -82,7 +85,7 @@ export default function JoinGame(): JSX.Element {
         setLoading(false)
       },
       (error) => {
-        logger.error('JoinGame', 'Error in games snapshot listener', { 
+        JoinGameLogger.error('Error in games snapshot listener', { 
           error, 
           userId: currentUser.uid 
         })
@@ -92,7 +95,7 @@ export default function JoinGame(): JSX.Element {
     )
 
     return () => {
-      logger.debug('JoinGame', 'Cleaning up join game component', { 
+      JoinGameLogger.debug('Cleaning up join game component', { 
         userId: currentUser.uid 
       })
       unsubscribe()
@@ -107,7 +110,7 @@ export default function JoinGame(): JSX.Element {
     }
 
     if (wager > balance) {
-      logger.warn('JoinGame', 'Insufficient balance', { 
+      JoinGameLogger.warn('Insufficient balance', { 
         wager, 
         balance 
       })
@@ -116,7 +119,7 @@ export default function JoinGame(): JSX.Element {
     }
 
     setLoading(true)
-    logger.info('JoinGame', 'Attempting to join game', { 
+    JoinGameLogger.info('Attempting to join game', { 
       gameId, 
       userId: currentUser.uid,
       wager 
@@ -127,7 +130,7 @@ export default function JoinGame(): JSX.Element {
       const gameSnap = await getDoc(gameRef)
 
       if (!gameSnap.exists()) {
-        logger.error('JoinGame', 'Game not found', { gameId })
+        JoinGameLogger.error('Game not found', { gameId })
         toast.error("Game not found!")
         setLoading(false)
         return
@@ -135,7 +138,7 @@ export default function JoinGame(): JSX.Element {
 
       const gameData = gameSnap.data() as GameData
       if (gameData.status !== GAME_STATUS.WAITING) {
-        logger.warn('JoinGame', 'Game is no longer available', { 
+        JoinGameLogger.warn('Game is no longer available', { 
           gameId, 
           status: gameData.status 
         })
@@ -144,25 +147,61 @@ export default function JoinGame(): JSX.Element {
         return
       }
 
-      // Update game document
-      await updateDoc(gameRef, {
-        blackPlayer: currentUser.uid,
+      // Determine player colors based on creator's preference
+      let updateFields: Record<string, any> = {
         status: GAME_STATUS.IN_PROGRESS,
         whiteTime: gameData.timeControl,
         blackTime: gameData.timeControl,
-        currentTurn: "w",
-        lastMoveTime: serverTimestamp()
-      })
+        currentTurn: "w", // White always starts
+        lastMoveTime: serverTimestamp(),
+        player2Id: currentUser.uid // Always set joining player as player2
+      };
+      
+      // Assign player to correct color based on creator's preference
+      const creatorPreferredColor = gameData.creatorPreferredColor || 'white';
+      
+      if (creatorPreferredColor === 'white') {
+        // Creator wants to be white, joiner is black
+        updateFields.blackPlayer = currentUser.uid;
+      } else if (creatorPreferredColor === 'black') {
+        // Creator wants to be black, joiner is white
+        updateFields.whitePlayer = currentUser.uid;
+      } else if (creatorPreferredColor === 'random') {
+        // Randomly assign colors
+        const randomValue = Math.random();
+        if (randomValue < 0.5) {
+          // Creator is white, joiner is black
+          updateFields.blackPlayer = currentUser.uid;
+        } else {
+          // Creator is black, joiner is white
+          updateFields.whitePlayer = currentUser.uid;
+          // If creator should be black, update the blackPlayer field
+          updateFields.blackPlayer = gameData.player1Id;
+          // And remove whitePlayer if it was set
+          if (gameData.whitePlayer) {
+            updateFields.whitePlayer = null;
+          }
+        }
+      }
+      
+      JoinGameLogger.debug('Assigning player colors', { 
+        gameId, 
+        creatorPreferredColor,
+        updateFields
+      });
 
-      logger.debug('JoinGame', 'Game document updated', { 
+      // Update game document
+      await updateDoc(gameRef, updateFields);
+
+      JoinGameLogger.debug('Game document updated', { 
         gameId, 
         userId: currentUser.uid 
       })
 
       // Deduct wager from user's balance using AuthContext
-      await updateBalance(-wager, "joining game")
+      await updateBalance(-wager, "Wager for game", false);
 
-      logger.info('JoinGame', 'Successfully joined game', { 
+      JoinGameLogger.info('Successfully joined game', { 
         gameId, 
         userId: currentUser.uid 
       })
@@ -171,7 +210,7 @@ export default function JoinGame(): JSX.Element {
       navigate(`/game/${gameId}`)
     } catch (error) {
       const err = error as Error
-      logger.error('JoinGame', 'Error joining game', { 
+      JoinGameLogger.error('Error joining game', { 
         error: err, 
         gameId, 
         userId: currentUser?.uid 

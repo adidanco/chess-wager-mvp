@@ -5,7 +5,10 @@ import ErrorBoundary from "./components/ErrorBoundary"
 import { GameProvider } from "./context/GameContext"
 import { AuthProvider } from "./context/AuthContext"
 import { networkHandler } from "./utils/networkHandler"
-import { logger } from "./utils/logger"
+import { logger, createLogger } from "./utils/logger"
+
+// Create a component-specific logger
+const appLogger = createLogger('App');
 
 // Pages
 import Home from "./pages/Home"
@@ -27,14 +30,14 @@ import TestConstants from "./test-constants"
 // Wrap Firestore operations with network check
 const withNetworkCheck = async <T,>(operation: () => Promise<T>): Promise<T> => {
   if (!networkHandler.isConnected()) {
-    logger.error('App', 'No network connection')
+    appLogger.error('No network connection')
     throw new Error('No network connection')
   }
   return operation()
 }
 
 // Log app initialization
-logger.info('App', 'Initializing application')
+appLogger.info('Initializing application')
 
 function App(): JSX.Element {
   return (

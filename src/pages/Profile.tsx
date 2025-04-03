@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-hot-toast";
-import { logger } from "../utils/logger";
+import { logger, createLogger } from '../utils/logger'
+// Create a component-specific logger
+const ProfileLogger = createLogger('Profile');
+;
 import UserStats from "../components/home/UserStats";
 import LoadingSpinner from "../components/common/LoadingSpinner";
 import PageLayout from "../components/common/PageLayout";
@@ -26,7 +29,7 @@ const Profile = (): JSX.Element => {
 
   useEffect(() => {
     if (!isAuthenticated && !loading) {
-      logger.warn('Profile', 'User not authenticated, redirecting to login');
+      ProfileLogger.warn('User not authenticated, redirecting to login');
       navigate("/login");
     }
     
@@ -59,7 +62,7 @@ const Profile = (): JSX.Element => {
       }
     } catch (error) {
       const err = error as Error;
-      logger.error('Profile', 'Error updating profile', { error: err });
+      ProfileLogger.error('Error updating profile', { error: err });
       toast.error("Failed to update profile");
     }
   };
