@@ -330,17 +330,18 @@ export default function ChooseGame(): JSX.Element {
                 ) : (
                   // Simpler card for unavailable games
                   <div key={game.name} onClick={() => handleGameSelect(game.path, false)} className="h-full">
-                    <div className="bg-white/90 rounded-lg shadow-md overflow-hidden h-full relative">
-                      <div className="absolute inset-0 bg-gray-200/50 backdrop-blur-[1px] flex items-center justify-center z-10">
-                        <div className="bg-muted-violet text-white py-1 px-4 rounded-full font-bold transform rotate-[-5deg] shadow-lg text-sm">
+                    <div className="bg-white rounded-lg shadow-md overflow-hidden h-full relative transition-all hover:shadow-lg">
+                      {/* Coming Soon Overlay */}
+                      <div className="absolute inset-0 bg-gray-800/30 backdrop-blur-[1px] flex items-center justify-center z-10">
+                        <div className="bg-soft-pink text-white px-4 py-2 rounded-lg font-bold transform rotate-12 shadow-lg">
                           COMING SOON
                         </div>
                       </div>
-                      <div className="h-40 bg-gray-100 flex items-center justify-center">
+                      <div className="h-40 bg-gray-50 flex items-center justify-center">
                         <img
                           src={game.icon}
                           alt={`${game.name} icon`}
-                          className="h-32 w-32 object-contain opacity-50"
+                          className="h-32 w-32 object-contain"
                         />
                       </div>
                       <div className="p-4">
