@@ -1,52 +1,43 @@
-# Chess Wager MVP - TypeScript Version
+# Chess Wager MVP
 
-This is the stable TypeScript branch of the Chess Wager MVP project. This branch contains the TypeScript implementation with enhanced type safety, real money transactions, player ratings, and comprehensive admin capabilities.
-
-## Branch Information
-
-- **Current Branch**: `stable-typescript` (TypeScript-only version)
-- **JavaScript Version**: Available in the `stable-javascript` branch
+This is the stable TypeScript version of the Chess Wager MVP platform. The platform supports multiple games with real or virtual wagers, with comprehensive user authentication, balance management, and gameplay features.
 
 ## Project Overview
 
-Chess Wager is a platform where users can play chess with real or virtual wagers. Key features include:
+Chess Wager is a platform where users can play chess and other games with real or virtual wagers. The platform now supports two game types:
 
-- User authentication with email verification and OTP
-- Real money balance management and secure transactions
-- Glicko-2 rating system for skill-based matchmaking
-- Real-time chess gameplay with standard rules
-- Secure wagering and payout systems
-- Administrative dashboard for transaction management
-- Comprehensive user profiles and statistics
+1. **Chess**: A fully functional chess game with standard rules, wagers, and Glicko-2 ratings.
+2. **Rangvaar** (new): A trick-taking card game for 4 players in 2 teams, with bidding and trump mechanics.
 
-## Recent Updates
+## Game Status
 
-- **Real Money Transactions**: Implemented deposit and withdrawal flows using UPI for Indian users
-- **Glicko-2 Rating System**: Added sophisticated player rating system for fair matchmaking
-- **Firebase Cloud Functions**: Implemented secure backend processes for handling transactions
-- **Admin Dashboard**: Added comprehensive admin tools for managing withdrawals and user data
-- **Enhanced Security**: Implemented Firestore security rules to protect financial transactions
-- **User Stats**: Added detailed player statistics and rating history
+### Chess Game
+- ✅ **Fully Functional**: The Chess game implementation is stable and includes complete gameplay, wagering, and payout systems.
+- ✅ **Rating System**: Glicko-2 rating system implemented for fair matchmaking.
+- ✅ **Payouts**: Cloud Functions securely handle payouts when games finish.
 
-## Deployment
-
-The application is deployed to Firebase Hosting. The current live version can be accessed at:
-[https://chess-wager-mvp.web.app](https://chess-wager-mvp.web.app)
+### Rangvaar Game (New Addition)
+- ✅ **Core Gameplay**: Game creation, player joining, bidding, card playing, and trick-taking mechanics are complete.
+- ✅ **UI Implementation**: Complete UI for game creation, lobby, and gameplay.
+- ✅ **Game Logic**: Rules enforcement, trick evaluation, and round management are working.
+- ✅ **Debug Controls**: Development-only controls for testing game flow transitions.
+- ⚠️ **Payout System**: Client-side payout transactions are implemented but encountering errors.
+- ⚠️ **Known Issue**: Transaction failures during round transitions and game completion.
+- 🔄 **Next Step**: Implementing a Cloud Function for secure payouts similar to the Chess game.
 
 ## Technical Features
 
-### Rating System
-- Implemented Glicko-2 rating algorithm
-- Rating history tracking
-- Performance-based matchmaking
+### Authentication & User Management
+- Email verification and OTP
+- User profiles and statistics
+- Balance management
 
 ### Transaction System
 - Secure deposit and withdrawal using UPI
 - Transaction logs and history
 - Admin approval system for withdrawals
-- Platform fee structure for monetization
 
-### Firebase Features
+### Firebase Integration
 - Firestore for data storage
 - Cloud Functions for secure transaction processing
 - Authentication with email verification
@@ -60,38 +51,70 @@ The application is deployed to Firebase Hosting. The current live version can be
    npm install
    ```
 
-2. **Run development server**:
+2. **Set up Firebase Functions**:
+   ```
+   cd functions
+   npm install
+   ```
+
+3. **Run development server**:
    ```
    npm run dev
    ```
 
-3. **Type checking**:
+4. **Type checking**:
    ```
    npm run tsc
    ```
 
-4. **Build for production**:
+5. **Build for production**:
    ```
    npm run build
    ```
 
-5. **Deploy to Firebase**:
+6. **Deploy to Firebase**:
    ```
    firebase deploy
    ```
 
-## Branch Organization
+## Rangvaar Game Architecture
 
-- `stable-typescript` (this branch): Stable TypeScript version with enhanced type safety
-- `stable-javascript`: Original JavaScript version for reference
-- `main`: Default branch (TypeScript version)
+The Rangvaar game follows a client-server architecture with Firestore as the database:
 
-## Future Plans
+### Data Model
+- `rangvaarGames`: Collection for storing game state
+- `RangvaarGameState`: Core game state type with team scores, round information
+- `RoundState`: Per-round state including hands, bids, tricks, and scores
 
-- **Payment Gateway Integration**: Plans to integrate Cashfree for seamless deposits and withdrawals
-- **Enhanced Analytics**: Improved user and game statistics
-- **Tournament Structure**: Support for tournament play with prize pools
-- **Mobile Application**: Development of mobile versions for iOS and Android
+### Key Components
+- `CreateRangvaarGame.tsx`: Game creation interface
+- `RangvaarLobby.tsx`: Pre-game lobby for players to join
+- `RangvaarGame.tsx`: Main game UI with bidding and card playing interfaces
+- `rangvaarService.ts`: Core game logic and Firestore interaction
+- `useRangvaarGame.ts`: React hook for game state management
+
+### Game Flow
+1. Game creation with wager amount and number of rounds
+2. Players join via lobby
+3. Rounds proceed with:
+   - Bidding phase
+   - Trump selection
+   - Trick playing
+   - Scoring
+4. Game completion and payout (currently experiencing issues)
+
+## Known Issues & Roadmap
+
+### Current Issues
+- **Rangvaar Payout System**: Firestore transactions failing during payout attempts with `failed-precondition` errors.
+- **Concurrent Transactions**: Race conditions during round transitions occasionally cause inconsistent state.
+- **Client-Side Updates**: Security rules sometimes block balance updates from client code.
+
+### Roadmap
+1. **Immediate**: Implement Cloud Function for Rangvaar payouts
+2. **Short-term**: Fix wager calculation UI issue on create game screen
+3. **Medium-term**: Enhance state transitions to prevent race conditions
+4. **Long-term**: Add additional card games and tournament structure
 
 ## Contributing
 

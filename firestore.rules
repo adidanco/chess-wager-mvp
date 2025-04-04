@@ -1,38 +1,51 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // Default deny all access
+    // match /{document=**} {
+    //  allow read, write: if false;
+    // }
+
+    // Users Collection
     match /users/{userId} {
-      // Allow read if authenticated and the user id matches the document id
-      allow read: if request.auth != null && request.auth.uid == userId;
-      // Allow create if authenticated and creating their own document
+      // Allow reading own profile or if admin (future)
+      allow read: if request.auth != null; // Simple MVP rule
+      
+      // Allow creating own profile
       allow create: if request.auth != null && request.auth.uid == userId;
-      // Allow update if authenticated and updating their own document
-      // BUT don't allow direct updates to balance, realMoneyBalance or pendingWithdrawalAmount
-      allow update: if request.auth != null && 
-                      request.auth.uid == userId &&
-                      !('realMoneyBalance' in request.resource.data) &&
-                      !('pendingWithdrawalAmount' in request.resource.data) &&
-                      !('balance' in request.resource.data);
-      // For special functions that need to update balance, use Custom Claims or Cloud Functions
+      
+      // WARNING: INSECURE MVP RULE - Allows any authenticated user to update any user's fields (incl. balance).
+      // REQUIRED for client-side balance updates in MVP phase.
+      // MUST BE REPLACED with secure server-side logic (Cloud Functions) before production.
+      allow update: if request.auth != null; 
     }
-    
-    match /games/{gameId} {
-      // Allow read if authenticated
+
+    // Rangvaar Games Collection
+    match /rangvaarGames/{gameId} {
+      // Allow reading any game if authenticated
       allow read: if request.auth != null;
-      // Allow create if authenticated
+      
+      // Allow creating games if authenticated
       allow create: if request.auth != null;
-      // Allow update if authenticated and either the game creator or the game joiner
-      allow update: if request.auth != null && 
-                    (resource.data.player1Id == request.auth.uid || 
-                     resource.data.player2Id == request.auth.uid);
+      
+      // Allow updating game state if authenticated (Needed for phase changes, card plays, payoutProcessed flag etc.)
+      allow update: if request.auth != null; 
+    }
+
+    // Transactions Collection (Example - adjust as needed)
+    // Usually more restrictive - e.g., only create own transactions
+    match /transactions/{transactionId} {
+        allow read: if request.auth != null && request.auth.uid == resource.data.userId;
+        allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+        allow update, delete: if false; // Generally don't allow client update/delete
     }
     
-    match /transactions/{transactionId} {
-      // Allow read if authenticated and the transaction belongs to the user
-      allow read: if request.auth != null && 
-                  resource.data.userId == request.auth.uid;
-      // Disallow direct client writes - all transaction writes must go through Cloud Functions
-      allow write: if false;
+    // Add rules for other collections ('games'?) if needed
+    match /games/{gameId} {
+       allow read, write: if request.auth != null; // Example permissive rule if used
     }
+
   }
 } 

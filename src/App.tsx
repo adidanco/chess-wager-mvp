@@ -27,6 +27,8 @@ import ChooseGame from "./pages/ChooseGame"
 import CreateRangvaarGame from "./pages/CreateRangvaarGame"
 import CreateScambodiaGame from "./pages/CreateScambodiaGame"
 import ComingSoon from "./pages/ComingSoon"
+import RangvaarLobby from "./pages/RangvaarLobby"
+import RangvaarGame from "./pages/RangvaarGame"
 
 // Wrap Firestore operations with network check
 const withNetworkCheck = async <T,>(operation: () => Promise<T>): Promise<T> => {
@@ -57,6 +59,8 @@ function App(): JSX.Element {
                 <Route path="/game/:gameId" element={<Game />} />
                 <Route path="/create-game" element={<CreateGame />} />
                 <Route path="/create-rangvaar-game" element={<CreateRangvaarGame />} />
+                <Route path="/game/rangvaar/:gameId" element={<RangvaarLobby />} />
+                <Route path="/game/rangvaar/play/:gameId" element={<RangvaarGame />} />
                 <Route path="/create-scambodia-game" element={<CreateScambodiaGame />} />
                 <Route path="/coming-soon" element={<ComingSoon />} />
                 <Route path="/join-game" element={<JoinGame />} />

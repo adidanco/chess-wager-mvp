@@ -11,7 +11,8 @@ import {
   orderBy, 
   serverTimestamp,
   QuerySnapshot,
-  DocumentData 
+  DocumentData,
+  getDocs
 } from "firebase/firestore"
 import { db } from "../firebase"
 import toast from "react-hot-toast"
@@ -19,17 +20,27 @@ import { logger } from "../utils/logger"
 import { useAuth } from "../context/AuthContext"
 import LoadingSpinner from "../components/common/LoadingSpinner"
 import PageLayout from "../components/common/PageLayout"
-import { GameData } from "chessTypes"
+import { GameData, UserProfile } from "chessTypes"
 import { GAME_STATUS, CURRENCY_SYMBOL } from "../utils/constants"
+import { RangvaarGameState } from "../types/rangvaar"
+import chessIcon from "../assets/Chess.png"
+import rangvaarIcon from "../assets/Rangvaar.png"
+import { joinRangvaarGame } from "../services/rangvaarService"
 
-// Interface for game items in the available games list
-interface GameItem extends GameData {
+// Unified interface for displaying games in the list
+interface DisplayGameItem {
   id: string;
+  gameType: 'Chess' | 'Rangvaar'; // Differentiate game type
+  wager: number;
+  creatorUsername?: string; // Optional: Fetch if needed
+  createdAt?: any; // Firestore Timestamp
+  icon: string; // Path to the game icon
+  creatorId?: string; // Store creator ID
 }
 
 export default function JoinGame(): JSX.Element {
   const navigate = useNavigate()
-  const [availableGames, setAvailableGames] = useState<GameItem[]>([])
+  const [availableGames, setAvailableGames] = useState<DisplayGameItem[]>([])
   const [loading, setLoading] = useState<boolean>(true)
   const { currentUser, balance, updateBalance, isAuthenticated } = useAuth()
 
@@ -48,58 +59,99 @@ export default function JoinGame(): JSX.Element {
       userId: currentUser.uid 
     })
 
-    // Subscribe to available games
-    const q = query(
-      collection(db, "games"),
+    // Define error handler first
+    const handleSnapshotError = (error: Error) => {
+      logger.error('JoinGame', 'Error in games snapshot listener', { error, userId: currentUser?.uid })
+      toast.error("Error fetching available games!")
+      setLoading(false) // Stop loading on error too
+    }
+
+    // Query for Chess games
+    const chessQuery = query(
+      collection(db, "games"), 
       where("status", "==", GAME_STATUS.WAITING)
     )
-
-    logger.debug('JoinGame', 'Setting up games query', { 
-      userId: currentUser.uid,
-      query: q
-    })
-
-    const unsubscribe = onSnapshot(q, 
-      (snapshot: QuerySnapshot<DocumentData>) => {
-        const games: GameItem[] = []
-        snapshot.forEach((doc) => {
-          const gameData = doc.data() as GameData
-          // Client-side filter to exclude user's own games
-          if (gameData.whitePlayer !== currentUser.uid) {
-            logger.debug('JoinGame', 'Found game', { 
-              gameId: doc.id,
-              status: gameData.status,
-              whitePlayer: gameData.whitePlayer
-            })
-            games.push({ id: doc.id, ...gameData })
-          }
-        })
-        logger.debug('JoinGame', 'Available games updated', { 
-          count: games.length,
-          games: games.map(g => ({ id: g.id, wager: g.wager }))
-        })
-        setAvailableGames(games)
-        setLoading(false)
-      },
-      (error) => {
-        logger.error('JoinGame', 'Error in games snapshot listener', { 
-          error, 
-          userId: currentUser.uid 
-        })
-        toast.error("Error fetching available games!")
-        setLoading(false)
-      }
+    
+    // Query for Rangvaar games
+    const rangvaarQuery = query(
+      collection(db, "rangvaarGames"), 
+      where("status", "==", "Waiting") // Use string status for Rangvaar
     )
 
+    logger.debug('JoinGame', 'Setting up game listeners', { userId: currentUser.uid })
+
+    // Combine listeners
+    const unsubChess = onSnapshot(chessQuery, 
+      (snapshot: QuerySnapshot<DocumentData>) => processSnapshots(snapshot, null), 
+      handleSnapshotError
+    )
+    
+    const unsubRangvaar = onSnapshot(rangvaarQuery, 
+      (snapshot: QuerySnapshot<DocumentData>) => processSnapshots(null, snapshot),
+      handleSnapshotError
+    )
+
+    let chessGames: DisplayGameItem[] = []
+    let rangvaarGames: DisplayGameItem[] = []
+    let initialLoadComplete = { chess: false, rangvaar: false }
+
+    const processSnapshots = (chessSnap: QuerySnapshot<DocumentData> | null, rangvaarSnap: QuerySnapshot<DocumentData> | null) => {
+      if (chessSnap) {
+        chessGames = chessSnap.docs
+          .map(doc => ({
+            id: doc.id,
+            gameType: 'Chess' as const, // Explicitly type as literal
+            wager: (doc.data() as GameData).wager || 0,
+            createdAt: (doc.data() as GameData).createdAt,
+            creatorId: (doc.data() as GameData).whitePlayer, // Assuming whitePlayer is creator
+            icon: chessIcon,
+          }))
+          .filter(game => game.creatorId !== currentUser?.uid) // Exclude user's own games
+        initialLoadComplete.chess = true
+      }
+      if (rangvaarSnap) {
+        rangvaarGames = rangvaarSnap.docs
+          .map(doc => ({
+            id: doc.id,
+            gameType: 'Rangvaar' as const, // Explicitly type as literal
+            wager: (doc.data() as RangvaarGameState).wagerPerPlayer || 0,
+            createdAt: (doc.data() as RangvaarGameState).createdAt,
+            creatorId: (doc.data() as RangvaarGameState).players[0]?.userId, // First player is creator
+            icon: rangvaarIcon,
+          }))
+          .filter(game => game.creatorId !== currentUser?.uid) // Exclude user's own games
+        initialLoadComplete.rangvaar = true
+      }
+
+      // Combine and update state
+      const combinedGames = [...chessGames, ...rangvaarGames]
+      // Optional: Sort combined list, e.g., by creation time
+      combinedGames.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0))
+      
+      setAvailableGames(combinedGames)
+      logger.debug('JoinGame', 'Available games updated', { count: combinedGames.length })
+
+      // Only stop loading indicator once both initial loads are done
+      if (initialLoadComplete.chess && initialLoadComplete.rangvaar) {
+        setLoading(false)
+      }
+    }
+    
+    // Initial fetch to set loading state correctly
+    Promise.all([getDocs(chessQuery), getDocs(rangvaarQuery)])
+      .then(([chessSnap, rangvaarSnap]) => {
+        processSnapshots(chessSnap, rangvaarSnap)
+      }).catch(handleSnapshotError)
+      
+    // Cleanup listeners
     return () => {
-      logger.debug('JoinGame', 'Cleaning up join game component', { 
-        userId: currentUser.uid 
-      })
-      unsubscribe()
+      logger.debug('JoinGame', 'Cleaning up join game component', { userId: currentUser?.uid })
+      unsubChess()
+      unsubRangvaar()
     }
   }, [navigate, currentUser, isAuthenticated])
 
-  const handleJoinGame = async (gameId: string, wager: number): Promise<void> => {
+  const handleJoinGame = async (gameId: string, wager: number, gameType: 'Chess' | 'Rangvaar'): Promise<void> => {
     if (!currentUser) {
       toast.error("You must be logged in to join a game")
       navigate("/login")
@@ -116,68 +168,91 @@ export default function JoinGame(): JSX.Element {
     }
 
     setLoading(true)
-    logger.info('JoinGame', 'Attempting to join game', { 
+    logger.info('JoinGame', `Attempting to join ${gameType} game`, { 
       gameId, 
       userId: currentUser.uid,
       wager 
     })
 
-    try {
-      const gameRef = doc(db, "games", gameId)
-      const gameSnap = await getDoc(gameRef)
-
-      if (!gameSnap.exists()) {
-        logger.error('JoinGame', 'Game not found', { gameId })
-        toast.error("Game not found!")
-        setLoading(false)
-        return
-      }
-
-      const gameData = gameSnap.data() as GameData
-      if (gameData.status !== GAME_STATUS.WAITING) {
-        logger.warn('JoinGame', 'Game is no longer available', { 
+    if (gameType === 'Rangvaar') {
+      // --- Handle Joining Rangvaar Game --- //
+      try {
+        await joinRangvaarGame(gameId, currentUser.uid)
+        logger.info('JoinGame', 'Successfully joined Rangvaar game', { 
           gameId, 
-          status: gameData.status 
+          userId: currentUser.uid 
         })
-        toast.error("Game is no longer available!")
+        toast.success("Joined Rangvaar game!")
+        navigate(`/game/rangvaar/${gameId}`)
+      } catch (error) {
+        const err = error as Error
+        logger.error('JoinGame', 'Error joining Rangvaar game', { 
+          error: err, 
+          gameId, 
+          userId: currentUser?.uid 
+        })
+        toast.error(`Failed to join Rangvaar game: ${err.message}`)
         setLoading(false)
-        return
       }
+    } else if (gameType === 'Chess') {
+      // --- Handle Joining Chess Game (Existing Logic) --- //
+      try {
+        const gameRef = doc(db, "games", gameId)
+        const gameSnap = await getDoc(gameRef)
 
-      // Update game document
-      await updateDoc(gameRef, {
-        blackPlayer: currentUser.uid,
-        player2Id: currentUser.uid,
-        status: GAME_STATUS.IN_PROGRESS,
-        whiteTime: gameData.timeControl,
-        blackTime: gameData.timeControl,
-        currentTurn: "w",
-        lastMoveTime: serverTimestamp()
-      })
+        if (!gameSnap.exists()) {
+          logger.error('JoinGame', 'Chess game not found', { gameId })
+          throw new Error("Game not found!")
+        }
 
-      logger.debug('JoinGame', 'Game document updated', { 
-        gameId, 
-        userId: currentUser.uid 
-      })
+        const gameData = gameSnap.data() as GameData
+        if (gameData.status !== GAME_STATUS.WAITING) {
+          logger.warn('JoinGame', 'Chess game is no longer available', { 
+            gameId, 
+            status: gameData.status 
+          })
+          throw new Error("Game is no longer available!")
+        }
 
-      // Deduct wager from user's balance using AuthContext
-      await updateBalance(-wager, "joining game")
+        // Update game document (Chess specific fields)
+        await updateDoc(gameRef, {
+          blackPlayer: currentUser.uid,
+          player2Id: currentUser.uid,
+          status: GAME_STATUS.IN_PROGRESS,
+          whiteTime: gameData.timeControl,
+          blackTime: gameData.timeControl,
+          currentTurn: "w",
+          lastMoveTime: serverTimestamp()
+        })
 
-      logger.info('JoinGame', 'Successfully joined game', { 
-        gameId, 
-        userId: currentUser.uid 
-      })
+        logger.debug('JoinGame', 'Chess game document updated', { 
+          gameId, 
+          userId: currentUser.uid 
+        })
 
-      toast.success("Joined game successfully!")
-      navigate(`/game/${gameId}`)
-    } catch (error) {
-      const err = error as Error
-      logger.error('JoinGame', 'Error joining game', { 
-        error: err, 
-        gameId, 
-        userId: currentUser?.uid 
-      })
-      toast.error("Failed to join game")
+        // Deduct wager from user's balance using AuthContext (Chess specific)
+        await updateBalance(-wager, "joining chess game")
+
+        logger.info('JoinGame', 'Successfully joined Chess game', { 
+          gameId, 
+          userId: currentUser.uid 
+        })
+        toast.success("Joined Chess game successfully!")
+        navigate(`/game/${gameId}`)
+      } catch (error) {
+        const err = error as Error
+        logger.error('JoinGame', 'Error joining Chess game', { 
+          error: err, 
+          gameId, 
+          userId: currentUser?.uid 
+        })
+        toast.error(`Failed to join Chess game: ${err.message}`)
+        setLoading(false)
+      }
+    } else {
+      // Should not happen with current types
+      logger.error('JoinGame', 'Unknown game type encountered', { gameType })
+      toast.error('Cannot join game: Unknown game type.')
       setLoading(false)
     }
   }
@@ -202,29 +277,35 @@ export default function JoinGame(): JSX.Element {
             </button>
           </div>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {availableGames.map((game) => (
               <div 
                 key={game.id} 
-                className="bg-white p-4 rounded-lg shadow-md border border-gray-200"
+                className="bg-white p-4 rounded-lg shadow-md border border-gray-200 flex flex-col justify-between"
               >
-                <div className="mb-3">
-                  <span className="font-semibold">Wager: </span>
-                  <span className="text-green-600 font-bold">{CURRENCY_SYMBOL}{game.wager}</span>
+                <div>
+                  <div className="flex items-center mb-3">
+                    <img src={game.icon} alt={game.gameType} className="w-8 h-8 mr-3 rounded object-contain" />
+                    <span className="font-semibold text-lg text-emerald-700">{game.gameType}</span>
+                  </div>
+                  <div className="mb-3 text-sm">
+                    <span className="font-medium">Wager: </span>
+                    <span className="text-green-600 font-bold">{CURRENCY_SYMBOL}{game.wager}</span>
+                  </div>
+                  <p className="text-xs text-gray-500 mb-3">
+                    Created: {game.createdAt?.toDate().toLocaleString() || "Just now"}
+                  </p>
                 </div>
-                <p className="text-sm text-gray-600 mb-3">
-                  Created: {game.createdAt?.toDate().toLocaleString() || "Just now"}
-                </p>
                 <button
-                  onClick={() => handleJoinGame(game.id, game.wager || 0)}
+                  onClick={() => handleJoinGame(game.id, game.wager, game.gameType)}
                   disabled={(game.wager || 0) > balance}
-                  className={`w-full py-2 px-4 rounded ${
+                  className={`w-full mt-2 py-2 px-4 rounded text-sm font-medium transition-colors ${
                     (game.wager || 0) > balance
-                      ? "bg-gray-400 cursor-not-allowed"
-                      : "bg-blue-600 hover:bg-blue-700"
-                  } text-white`}
+                      ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                      : "bg-emerald-600 hover:bg-emerald-700 text-white"
+                  }`}
                 >
-                  {(game.wager || 0) > balance ? "Insufficient Balance" : "Join Game"}
+                  {(game.wager || 0) > balance ? "Insufficient Balance" : `Join ${game.gameType} Game`}
                 </button>
               </div>
             ))}
