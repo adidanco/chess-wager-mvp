@@ -12,7 +12,6 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { name: 'Home', path: '/', icon: 'home', requiresAuth: true },
-  { name: 'Play', path: '/create-game', icon: 'chess', requiresAuth: true },
   { name: 'Wallet', path: '/wallet', icon: 'wallet', requiresAuth: true },
   { name: 'Profile', path: '/profile', icon: 'user', requiresAuth: true },
   { name: 'Settings', path: '/settings', icon: 'cog', requiresAuth: true },
@@ -54,15 +53,15 @@ const Navigation: React.FC = () => {
         <div className="flex justify-between items-center">
           {/* Logo and Title */}
           <div className="flex items-center">
-            <span className="text-xl font-bold text-blue-600 cursor-pointer" onClick={() => navigateTo('/')}>
-              ChessWager
+            <span className="text-xl font-bold text-emerald-600 cursor-pointer" onClick={() => navigateTo('/')}>
+              Oasis
             </span>
           </div>
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-6">
             {isAuthenticated && (
-              <div className="mr-4 py-1 px-3 bg-blue-50 rounded-full text-blue-700 font-medium">
+              <div className="mr-4 py-1 px-3 bg-emerald-50 rounded-full text-emerald-700 font-medium">
                 ₹{balance || 0}
               </div>
             )}
@@ -71,8 +70,8 @@ const Navigation: React.FC = () => {
               <span
                 key={item.path}
                 onClick={() => navigateTo(item.path)}
-                className={`cursor-pointer py-2 px-1 hover:text-blue-600 transition-colors ${
-                  location.pathname === item.path ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-700'
+                className={`cursor-pointer py-2 px-1 hover:text-emerald-600 transition-colors ${
+                  location.pathname === item.path ? 'border-b-2 border-emerald-500 text-emerald-600' : 'text-gray-700'
                 }`}
               >
                 <i className={`fas fa-${item.icon} mr-2`}></i>
@@ -106,7 +105,7 @@ const Navigation: React.FC = () => {
         {menuOpen && (
           <div className="md:hidden mt-3 pb-2 space-y-2">
             {isAuthenticated && (
-              <div className="px-4 py-2 bg-blue-50 rounded-md text-blue-700 font-medium mb-2">
+              <div className="px-4 py-2 bg-emerald-50 rounded-md text-emerald-700 font-medium mb-2">
                 Balance: ₹{balance || 0}
               </div>
             )}
@@ -116,7 +115,7 @@ const Navigation: React.FC = () => {
                 key={item.path}
                 onClick={() => navigateTo(item.path)}
                 className={`cursor-pointer px-4 py-2 rounded-md ${
-                  location.pathname === item.path ? 'bg-blue-100 text-blue-600' : 'text-gray-700 hover:bg-gray-100'
+                  location.pathname === item.path ? 'bg-emerald-100 text-emerald-600' : 'text-gray-700 hover:bg-gray-100'
                 }`}
               >
                 <i className={`fas fa-${item.icon} mr-3 w-6 text-center`}></i>

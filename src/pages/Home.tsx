@@ -104,8 +104,8 @@ export default function Home(): JSX.Element {
   }
 
   // Handlers for GameActions component
-  const handleCreateGame = (): void => {
-    navigate("/create-game")
+  const handleChooseGame = (): void => {
+    navigate("/choose-game")
   }
 
   const handleJoinGame = (): void => {
@@ -262,7 +262,7 @@ export default function Home(): JSX.Element {
         {/* Game action buttons */}
         <div className="mb-6">
           <GameActions 
-            onCreateGame={handleCreateGame} 
+            onCreateGame={handleChooseGame} 
             onJoinGame={handleJoinGame}
             onSettings={handleSettings}
             onLogout={handleLogout}

@@ -23,6 +23,10 @@ import AdminDashboard from "./pages/AdminDashboard"
 import TestConstants from "./test-constants"
 import TermsAndConditions from "./pages/TermsAndConditions"
 import ContactUs from "./pages/ContactUs"
+import ChooseGame from "./pages/ChooseGame"
+import CreateRangvaarGame from "./pages/CreateRangvaarGame"
+import CreateScambodiaGame from "./pages/CreateScambodiaGame"
+import ComingSoon from "./pages/ComingSoon"
 
 // Wrap Firestore operations with network check
 const withNetworkCheck = async <T,>(operation: () => Promise<T>): Promise<T> => {
@@ -49,8 +53,12 @@ function App(): JSX.Element {
                 <Route path="/login" element={<Login />} />
                 <Route path="/signup" element={<SignUp />} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
+                <Route path="/choose-game" element={<ChooseGame />} />
                 <Route path="/game/:gameId" element={<Game />} />
                 <Route path="/create-game" element={<CreateGame />} />
+                <Route path="/create-rangvaar-game" element={<CreateRangvaarGame />} />
+                <Route path="/create-scambodia-game" element={<CreateScambodiaGame />} />
+                <Route path="/coming-soon" element={<ComingSoon />} />
                 <Route path="/join-game" element={<JoinGame />} />
                 <Route path="/available-games" element={<AvailableGames />} />
                 <Route path="/profile" element={<Profile />} />

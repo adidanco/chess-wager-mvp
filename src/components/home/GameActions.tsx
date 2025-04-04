@@ -25,7 +25,7 @@ const GameActions = ({
         onClick={onCreateGame}
         className="w-full bg-blue-500 text-white py-3 px-4 rounded-md text-lg font-medium hover:bg-blue-600 transition-colors shadow-md"
       >
-        Create New Game
+        Choose Game
       </button>
       <button
         onClick={onJoinGame}
