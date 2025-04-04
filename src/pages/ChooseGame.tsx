@@ -310,17 +310,17 @@ export default function ChooseGame(): JSX.Element {
                         <img
                           src={game.icon}
                           alt={`${game.name} icon`}
-                          className="h-32 w-32 object-contain"
+                          className="h-32 w-32 object-contain drop-shadow-md"
                         />
                       </div>
-                      <div className="p-4">
-                        <div className="flex items-center mb-2">
-                          <h2 className="text-lg font-bold text-deep-purple">{game.name}</h2>
-                          <span className="ml-2 px-2 py-0.5 bg-green-100 text-green-800 text-xs rounded-full">Available</span>
+                      <div className="p-5">
+                        <div className="flex items-center mb-3">
+                          <h2 className="text-xl font-bold text-deep-purple tracking-tight">{game.name}</h2>
+                          <span className="ml-2 px-2 py-0.5 bg-green-100 text-green-800 text-xs font-semibold rounded-full">Available</span>
                         </div>
-                        <p className="text-gray-600 text-sm mb-3">{game.description}</p>
+                        <p className="text-gray-600 text-sm mb-3 leading-relaxed">{game.description}</p>
                         <div className="flex justify-end">
-                          <span className="inline-flex items-center text-soft-pink text-sm font-medium">
+                          <span className="inline-flex items-center text-soft-pink text-sm font-semibold">
                             Play Now <i className="fas fa-arrow-right ml-1"></i>
                           </span>
                         </div>
@@ -338,12 +338,12 @@ export default function ChooseGame(): JSX.Element {
                           className="h-32 w-32 object-contain"
                         />
                       </div>
-                      <div className="p-4">
+                      <div className="p-5">
                         <div className="flex items-center mb-2">
-                          <h2 className="text-lg font-medium text-gray-700">{game.name}</h2>
-                          <span className="ml-2 px-2 py-0.5 bg-soft-pink text-white text-xs rounded-full">Coming Soon</span>
+                          <h2 className="text-xl font-medium text-gray-700">{game.name}</h2>
+                          <span className="ml-2 px-2 py-0.5 bg-soft-pink text-white text-xs font-semibold rounded-full">Coming Soon</span>
                         </div>
-                        <p className="text-gray-500 text-sm">{game.description}</p>
+                        <p className="text-gray-500 text-sm leading-relaxed">{game.description}</p>
                       </div>
                     </div>
                   </div>

@@ -29,18 +29,20 @@ const GameActions = ({
           title="Choose Game"
           description="Create a new game room and invite friends to play"
           icon="fa-gamepad"
-          iconBgColor="bg-soft-pink"
+          iconBgColor="bg-deep-purple"
           actionText="Start Playing"
           onClick={onCreateGame}
+          className="border-2 border-deep-purple/10 hover:border-deep-purple/30"
         />
 
         <InfoCard
           title="Join Game"
           description="Join an existing game with a code or browse open games"
           icon="fa-sign-in-alt"
-          iconBgColor="bg-soft-lavender"
+          iconBgColor="bg-soft-pink"
           actionText="Find Games"
           onClick={onJoinGame}
+          className="border-2 border-soft-pink/10 hover:border-soft-pink/30"
         />
       </div>
 
