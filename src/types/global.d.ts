@@ -1,6 +1,8 @@
 // Global type definitions for the project
 
 declare module 'chessTypes' {
+  import { User } from 'firebase/auth'; // Import the actual User type
+
   // Extend Window interface if needed
   export interface Window {
     // Add any global window properties here
@@ -89,13 +91,7 @@ declare module 'chessTypes' {
 
   // Auth context related types
   export interface AuthContextType {
-    currentUser: {
-      uid: string;
-      email?: string | null;
-      displayName?: string | null;
-      photoURL?: string | null;
-      emailVerified?: boolean;
-    } | null; // Firebase Auth User
+    currentUser: User | null; // Use the imported User type here
     userProfile: UserProfile | null;
     loading: boolean;
     profileLoading: boolean;

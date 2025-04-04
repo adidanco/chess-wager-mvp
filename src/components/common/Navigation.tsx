@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import gamebitLogo from '../../assets/GamEBit.png';
 
 // Interface for a navigation item
 interface NavItem {
@@ -48,20 +49,26 @@ const Navigation: React.FC = () => {
   );
 
   return (
-    <nav className="bg-white shadow-md">
+    <nav className="bg-deep-purple text-white shadow-md pt-safe">
       <div className="container mx-auto px-4 py-3">
         <div className="flex justify-between items-center">
           {/* Logo and Title */}
           <div className="flex items-center">
-            <span className="text-xl font-bold text-emerald-600 cursor-pointer" onClick={() => navigateTo('/')}>
-              Oasis
+            <img 
+              src={gamebitLogo} 
+              alt="Gam(e)Bit" 
+              className="h-8 w-8 mr-2"
+              onClick={() => navigateTo('/')} 
+            />
+            <span className="text-xl font-bold text-white cursor-pointer font-poppins" onClick={() => navigateTo('/')}>
+              Gam(e)Bit
             </span>
           </div>
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-6">
             {isAuthenticated && (
-              <div className="mr-4 py-1 px-3 bg-emerald-50 rounded-full text-emerald-700 font-medium">
+              <div className="mr-4 py-1 px-3 bg-soft-pink/20 rounded-full text-soft-pink font-medium">
                 ₹{balance || 0}
               </div>
             )}
@@ -70,8 +77,8 @@ const Navigation: React.FC = () => {
               <span
                 key={item.path}
                 onClick={() => navigateTo(item.path)}
-                className={`cursor-pointer py-2 px-1 hover:text-emerald-600 transition-colors ${
-                  location.pathname === item.path ? 'border-b-2 border-emerald-500 text-emerald-600' : 'text-gray-700'
+                className={`cursor-pointer py-2 px-1 hover:text-soft-pink transition-colors ${
+                  location.pathname === item.path ? 'border-b-2 border-soft-pink text-soft-pink' : 'text-white'
                 }`}
               >
                 <i className={`fas fa-${item.icon} mr-2`}></i>
@@ -82,7 +89,7 @@ const Navigation: React.FC = () => {
             {isAuthenticated && (
               <span
                 onClick={handleLogout}
-                className="cursor-pointer py-2 px-1 text-gray-700 hover:text-red-600 transition-colors"
+                className="cursor-pointer py-2 px-1 text-white hover:text-soft-pink transition-colors"
               >
                 <i className="fas fa-sign-out-alt mr-2"></i>
                 Logout
@@ -94,7 +101,7 @@ const Navigation: React.FC = () => {
           <div className="md:hidden">
             <button
               onClick={() => setMenuOpen(!menuOpen)}
-              className="text-gray-700 focus:outline-none"
+              className="text-white focus:outline-none"
             >
               <i className={`fas fa-${menuOpen ? 'times' : 'bars'} text-xl`}></i>
             </button>
@@ -105,7 +112,7 @@ const Navigation: React.FC = () => {
         {menuOpen && (
           <div className="md:hidden mt-3 pb-2 space-y-2">
             {isAuthenticated && (
-              <div className="px-4 py-2 bg-emerald-50 rounded-md text-emerald-700 font-medium mb-2">
+              <div className="px-4 py-2 bg-soft-lavender/20 rounded-md text-white font-medium mb-2">
                 Balance: ₹{balance || 0}
               </div>
             )}
@@ -115,7 +122,7 @@ const Navigation: React.FC = () => {
                 key={item.path}
                 onClick={() => navigateTo(item.path)}
                 className={`cursor-pointer px-4 py-2 rounded-md ${
-                  location.pathname === item.path ? 'bg-emerald-100 text-emerald-600' : 'text-gray-700 hover:bg-gray-100'
+                  location.pathname === item.path ? 'bg-soft-pink/20 text-soft-pink' : 'text-white hover:bg-muted-violet'
                 }`}
               >
                 <i className={`fas fa-${item.icon} mr-3 w-6 text-center`}></i>
@@ -126,7 +133,7 @@ const Navigation: React.FC = () => {
             {isAuthenticated && (
               <div
                 onClick={handleLogout}
-                className="cursor-pointer px-4 py-2 text-red-600 hover:bg-red-50 rounded-md"
+                className="cursor-pointer px-4 py-2 text-white hover:bg-soft-pink/20 hover:text-soft-pink rounded-md"
               >
                 <i className="fas fa-sign-out-alt mr-3 w-6 text-center"></i>
                 Logout

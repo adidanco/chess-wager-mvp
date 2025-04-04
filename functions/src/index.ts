@@ -349,6 +349,129 @@ export const processGamePayout = functions.https.onCall((data, context) => {
 });
 
 /**
+ * Function to process Rangvaar game payouts when a game ends
+ */
+export const processRangvaarPayout = functions.https.onCall(async (data, context) => {
+  // Basic Authentication Check (can be enhanced)
+  if (!context?.auth) {
+    throw new functions.https.HttpsError(
+      "unauthenticated",
+      "User must be authenticated to trigger payout processing."
+    );
+  }
+
+  const { gameId } = data;
+  if (!gameId || typeof gameId !== 'string') {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "Valid gameId is required."
+    );
+  }
+
+  functions.logger.info(`Attempting to process Rangvaar payout for game: ${gameId}`);
+
+  const gameRef = db.collection("rangvaarGames").doc(gameId);
+  const transactionsRef = db.collection("transactions");
+
+  try {
+    await db.runTransaction(async (t) => {
+      // 1. Get the game document
+      const gameDoc = await t.get(gameRef);
+      if (!gameDoc.exists) {
+        throw new functions.https.HttpsError("not-found", `Rangvaar game ${gameId} not found.`);
+      }
+      const gameData = gameDoc.data();
+
+      // 2. Perform Validation Checks
+      if (!gameData) {
+        throw new functions.https.HttpsError("internal", `Game data missing for ${gameId}.`);
+      }
+      if (gameData.gameType !== 'Rangvaar') {
+        throw new functions.https.HttpsError("failed-precondition", `Game ${gameId} is not a Rangvaar game.`);
+      }
+      if (gameData.status !== 'Finished') {
+        throw new functions.https.HttpsError("failed-precondition", `Game ${gameId} is not finished. Current status: ${gameData.status}`);
+      }
+      if (gameData.payoutProcessed) {
+        functions.logger.warn(`Payout already processed for game ${gameId}. Exiting.`);
+        // Not throwing an error, just exiting gracefully if already processed.
+        return; 
+      }
+      if (gameData.winnerTeamId !== 1 && gameData.winnerTeamId !== 2) {
+          throw new functions.https.HttpsError("failed-precondition", `Invalid or missing winnerTeamId for game ${gameId}.`);
+      }
+      if (typeof gameData.wagerPerPlayer !== 'number' || gameData.wagerPerPlayer <= 0) {
+          throw new functions.https.HttpsError("failed-precondition", `Invalid wagerPerPlayer for game ${gameId}.`);
+      }
+      if (!gameData.teams || !gameData.teams['1'] || !gameData.teams['2'] || !gameData.players || gameData.players.length !== 4) {
+          throw new functions.https.HttpsError("internal", `Invalid teams or players structure in game ${gameId}.`);
+      }
+
+      // 3. Determine Winners and Calculate Payout
+      const winningTeamId = gameData.winnerTeamId;
+      const wagerPerPlayer = gameData.wagerPerPlayer;
+      const totalWagerPool = wagerPerPlayer * 4;
+      const platformFee = 0; // Keeping fee 0 for MVP as per client logic
+      const winningsPerPlayer = (totalWagerPool - platformFee) / 2; // Split amongst 2 winning players
+
+      const winningPlayerIds = gameData.teams[winningTeamId].playerIds;
+      if (!winningPlayerIds || winningPlayerIds.length !== 2) {
+          throw new functions.https.HttpsError("internal", `Could not determine winning player IDs for team ${winningTeamId} in game ${gameId}.`);
+      }
+      
+      functions.logger.info(`Processing payout for game ${gameId}. Winning Team: ${winningTeamId}, Winnings per player: ${winningsPerPlayer}`);
+
+      // 4. Update Winner Balances and Log Transactions
+      const winnerRefs = winningPlayerIds.map((id: string) => db.collection("users").doc(id));
+      // Fetch winner docs to ensure they exist (optional check, increment handles non-existence gracefully but good practice)
+      const winnerDocs = await Promise.all(winnerRefs.map(ref => t.get(ref))); 
+      for (let i = 0; i < winnerDocs.length; i++) {
+          if (!winnerDocs[i].exists) {
+              throw new functions.https.HttpsError("not-found", `Winning player ${winningPlayerIds[i]} not found.`);
+          }
+          // Increment balance
+          t.update(winnerRefs[i], {
+              realMoneyBalance: admin.firestore.FieldValue.increment(winningsPerPlayer),
+              updatedAt: admin.firestore.FieldValue.serverTimestamp()
+          });
+          // Log transaction
+          t.set(transactionsRef.doc(), {
+              userId: winningPlayerIds[i],
+              type: 'rangvaar_payout',
+              amount: winningsPerPlayer,
+              status: 'completed',
+              timestamp: admin.firestore.FieldValue.serverTimestamp(),
+              relatedGameId: gameId,
+              platformFee: platformFee,
+              notes: `Winnings from Rangvaar game ${gameId} (Team ${winningTeamId})`
+          });
+      }
+      
+      // 5. Update Game Document - Mark as Processed
+      t.update(gameRef, {
+          payoutProcessed: true,
+          payoutTimestamp: admin.firestore.FieldValue.serverTimestamp()
+      });
+      
+      functions.logger.info(`Successfully processed payout for Rangvaar game ${gameId}.`);
+    });
+
+    return { success: true, message: `Rangvaar payout for game ${gameId} processed successfully.` };
+
+  } catch (error: any) {
+    functions.logger.error(`Error processing Rangvaar payout for game ${gameId}:`, error);
+    // Ensure HttpsError is thrown back to the client
+    if (error instanceof functions.https.HttpsError) {
+      throw error;
+    }
+    throw new functions.https.HttpsError(
+      "internal",
+      error.message || `Failed to process Rangvaar payout for game ${gameId}.`
+    );
+  }
+});
+
+/**
  * Function to request a withdrawal
  */
 export const requestWithdrawal = functions.https.onCall((data, context) => {

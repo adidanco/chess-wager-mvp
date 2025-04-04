@@ -5,10 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <title>Oasis</title>
+    <title>Gam(e)Bit</title>
     <!-- Tailwind CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <!-- Google Fonts - Poppins and Open Sans -->
+    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600&family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/png" href="/src/assets/GamEBit.png" />
     <style>
       /* iOS-specific styles for notch compatibility */
       .pb-safe {
@@ -34,9 +38,43 @@
       button {
         -webkit-tap-highlight-color: transparent;
       }
+      
+      /* Typography */
+      body {
+        font-family: 'Open Sans', sans-serif;
+      }
+      
+      h1, h2, h3, h4, h5, h6 {
+        font-family: 'Poppins', sans-serif;
+      }
+      
+      /* Gam(e)Bit custom colors */
+      :root {
+        --deep-purple: #231942;
+        --soft-pink: #E0B1CB;  
+        --muted-violet: #5E548E;
+        --soft-lavender: #9F86C0;
+        --off-white: #FEF3FF;
+      }
     </style>
+    <script>
+      // Configure Tailwind with custom colors
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              'deep-purple': '#231942',
+              'soft-pink': '#E0B1CB',  
+              'muted-violet': '#5E548E',
+              'soft-lavender': '#9F86C0',
+              'off-white': '#FEF3FF'
+            }
+          }
+        }
+      }
+    </script>
   </head>
-  <body>
+  <body class="bg-off-white">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
