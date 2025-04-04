@@ -53,14 +53,16 @@ logger.info('App', 'Initializing application')
 
 // Force show splash screen & onboarding in development mode
 // Set this to true to always show splash screen and onboarding
-const FORCE_SHOW_ONBOARDING = true;
+const FORCE_SHOW_ONBOARDING = false;
 
 // Reset localStorage on initial load to force splash screen and onboarding to show
-// This is for development purposes only
+// This is for development purposes only - uncomment if needed for testing
+/*
 if (typeof window !== 'undefined') {
   localStorage.removeItem('hasSeenSplashScreen');
   localStorage.removeItem('hasCompletedOnboarding');
 }
+*/
 
 // AppContent component - needed to use hooks inside the App's render tree
 const AppContent = () => {
