@@ -267,7 +267,10 @@ export default function ChooseGame(): JSX.Element {
   return (
     <PageLayout>
       <div className="container mx-auto px-4 py-6 max-w-6xl">
-        <h1 className="text-2xl md:text-3xl font-bold text-center mb-6 text-emerald-700">Choose a Game</h1>
+        <div className="mb-8">
+          <h1 className="text-2xl md:text-3xl font-bold text-deep-purple mb-2">Choose a Game</h1>
+          <p className="text-muted-violet">Select a game to create a new game room or browse available matches</p>
+        </div>
         
         {/* Category Tabs - Horizontal Scrollable on Mobile */}
         <div className="mb-6 overflow-x-auto pb-2">
@@ -279,8 +282,8 @@ export default function ChooseGame(): JSX.Element {
                 className={`px-3 py-2 rounded-lg text-sm md:text-base font-medium whitespace-nowrap transition-colors
                   ${
                     activeCategory === category.id
-                      ? "bg-emerald-600 text-white"
-                      : "bg-gray-200 text-gray-800 hover:bg-gray-300"
+                      ? "bg-soft-pink text-white"
+                      : "bg-gray-200 text-gray-700 hover:bg-gray-300"
                   }`}
               >
                 {category.name}
@@ -297,35 +300,56 @@ export default function ChooseGame(): JSX.Element {
               activeCategory === category.id ? "block" : "hidden"
             }`}
           >
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {category.games.map((game) => (
-                <div
-                  key={game.name}
-                  className={`bg-white rounded-lg shadow-md p-4 flex flex-col items-center text-center 
-                    ${
-                      game.available
-                        ? "cursor-pointer hover:shadow-lg border-2 border-transparent hover:border-emerald-300"
-                        : "opacity-75"
-                    }`}
-                  onClick={() => handleGameSelect(game.path, game.available)}
-                >
-                  <div className="relative w-full pt-[100%] mb-3">
-                    <img
-                      src={game.icon}
-                      alt={`${game.name} icon`}
-                      className="absolute inset-0 w-full h-full object-contain"
-                    />
-                    {!game.available && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded-lg">
-                        <span className="bg-amber-500 text-white px-2 py-1 text-xs font-bold rounded rotate-[-15deg]">
-                          COMING SOON
-                        </span>
+                game.available ? (
+                  // Use InfoCard for available games
+                  <div key={game.name} onClick={() => handleGameSelect(game.path, true)} className="h-full">
+                    <div className="bg-white rounded-lg shadow-md overflow-hidden h-full transition-all hover:shadow-lg hover:translate-y-[-2px]">
+                      <div className="h-40 bg-gradient-to-b from-deep-purple to-soft-lavender flex items-center justify-center">
+                        <img
+                          src={game.icon}
+                          alt={`${game.name} icon`}
+                          className="h-32 w-32 object-contain"
+                        />
                       </div>
-                    )}
+                      <div className="p-4">
+                        <div className="flex items-center mb-2">
+                          <h2 className="text-lg font-bold text-deep-purple">{game.name}</h2>
+                          <span className="ml-2 px-2 py-0.5 bg-green-100 text-green-800 text-xs rounded-full">Available</span>
+                        </div>
+                        <p className="text-gray-600 text-sm mb-3">{game.description}</p>
+                        <div className="flex justify-end">
+                          <span className="inline-flex items-center text-soft-pink text-sm font-medium">
+                            Play Now <i className="fas fa-arrow-right ml-1"></i>
+                          </span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <h2 className="text-lg font-semibold mb-1 text-emerald-800">{game.name}</h2>
-                  <p className="text-gray-600 text-xs">{game.description}</p>
-                </div>
+                ) : (
+                  // Simpler card for unavailable games
+                  <div key={game.name} onClick={() => handleGameSelect(game.path, false)} className="h-full">
+                    <div className="bg-white/90 rounded-lg shadow-md overflow-hidden h-full relative">
+                      <div className="absolute inset-0 bg-gray-200/50 backdrop-blur-[1px] flex items-center justify-center z-10">
+                        <div className="bg-muted-violet text-white py-1 px-4 rounded-full font-bold transform rotate-[-5deg] shadow-lg text-sm">
+                          COMING SOON
+                        </div>
+                      </div>
+                      <div className="h-40 bg-gray-100 flex items-center justify-center">
+                        <img
+                          src={game.icon}
+                          alt={`${game.name} icon`}
+                          className="h-32 w-32 object-contain opacity-50"
+                        />
+                      </div>
+                      <div className="p-4">
+                        <h2 className="text-lg font-medium text-gray-700 mb-2">{game.name}</h2>
+                        <p className="text-gray-500 text-sm">{game.description}</p>
+                      </div>
+                    </div>
+                  </div>
+                )
               ))}
             </div>
           </div>
@@ -335,8 +359,9 @@ export default function ChooseGame(): JSX.Element {
         <div className="mt-8 text-center">
           <button
             onClick={() => navigate('/')}
-            className="bg-emerald-100 text-emerald-800 py-2 px-6 rounded-md font-medium hover:bg-emerald-200 transition-colors"
+            className="bg-deep-purple/10 text-deep-purple py-2 px-6 rounded-md font-medium hover:bg-deep-purple/20 transition-colors"
           >
+            <i className="fas fa-arrow-left mr-2"></i>
             Back to Home
           </button>
         </div>

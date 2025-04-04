@@ -278,9 +278,10 @@ export default function Home(): JSX.Element {
         {/* Game actions */}
         <Card
           variant="primary"
-          className="mb-6"
+          className="mb-6 overflow-hidden"
           title="Game Options"
-          titleAction={<i className="fas fa-gamepad text-white"></i>}
+          titleAction={<div className="flex items-center"><i className="fas fa-gamepad text-white mr-2"></i><span className="text-white text-xs font-normal bg-white/10 rounded-full px-2 py-0.5">2 Available</span></div>}
+          noPadding
         >
           <GameActions
             onCreateGame={handleChooseGame}
