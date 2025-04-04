@@ -141,7 +141,7 @@ export const useRangvaarGame = (gameId: string | undefined): UseRangvaarGameRetu
           // *** EXPLICIT AUTH CHECK ***
           if (!currentUser) {
               logger.error('useRangvaarGame', 'Payout trigger aborted: currentUser is null just before calling Cloud Function.', { gameId });
-              toast.error('Authentication error. Cannot process payout. Please try refreshing.');
+              toast.error('Sorry, unable to process payout for this game, we are fixing the bug soonest!');
               return; // Exit the async function
           }
 
@@ -166,7 +166,7 @@ export const useRangvaarGame = (gameId: string | undefined): UseRangvaarGameRetu
           } catch (err: any) {
             // Handle errors from getIdToken OR processRangvaarPayoutFn
             logger.error('useRangvaarGame', 'Error during payout trigger (token refresh or function call)', { gameId, error: err });
-            toast.error(`Error initiating payout: ${err.message || 'Failed to process payout'}`);
+            toast.error("Sorry, unable to process payout for this game, we are fixing the bug soonest!");
             // Keep hasAttemptedPayoutRef true to prevent immediate retries in this session, 
             // but a page refresh might allow another attempt if the underlying issue (e.g., network) is resolved.
           }
