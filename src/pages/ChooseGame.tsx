@@ -332,16 +332,16 @@ export default function ChooseGame(): JSX.Element {
                   <div key={game.name} onClick={() => handleGameSelect(game.path, false)} className="h-full">
                     <div className="bg-white rounded-lg shadow-md overflow-hidden h-full relative transition-all hover:shadow-lg">
                       {/* Coming Soon Overlay */}
-                      <div className="absolute inset-0 bg-gray-800/30 backdrop-blur-[1px] flex items-center justify-center z-10">
+                      <div className="absolute inset-0 bg-gray-800/20 flex items-center justify-center z-10">
                         <div className="bg-soft-pink text-white px-4 py-2 rounded-lg font-bold transform rotate-12 shadow-lg">
                           COMING SOON
                         </div>
                       </div>
-                      <div className="h-40 bg-gray-50 flex items-center justify-center">
+                      <div className="h-40 bg-gray-50 flex items-center justify-center relative z-5">
                         <img
                           src={game.icon}
                           alt={`${game.name} icon`}
-                          className="h-32 w-32 object-contain"
+                          className="h-36 w-36 object-contain drop-shadow-lg"
                         />
                       </div>
                       <div className="p-4">
