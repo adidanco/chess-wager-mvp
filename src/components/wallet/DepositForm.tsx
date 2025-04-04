@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Box, Button, TextField, Typography, Paper, CircularProgress, Alert } from '@mui/material';
 import { confirmDeposit } from '../../services/transactionService';
 import { useAuth } from '../../hooks/useAuth';
 import QRCode from 'react-qr-code';
 import { toast } from 'react-hot-toast';
+import Card from '../common/Card';
+import Button from '../common/Button';
 
 const DEPOSIT_AMOUNTS = [100, 200, 500, 1000, 2000, 5000];
 
@@ -47,7 +48,7 @@ export const DepositForm: React.FC = () => {
   // Generate UPI payment details
   const getUpiString = () => {
     // Format: upi://pay?pa=MERCHANT_UPI_ID&pn=MERCHANT_NAME&am=AMOUNT&cu=INR&tn=DESCRIPTION
-    return `upi://pay?pa=your-business@upi&pn=ChessWager&am=${amount}&cu=INR&tn=Deposit${amount}`;
+    return `upi://pay?pa=your-business@upi&pn=GamEBit&am=${amount}&cu=INR&tn=Deposit${amount}`;
   };
 
   // Handle confirm deposit after payment
@@ -89,116 +90,161 @@ export const DepositForm: React.FC = () => {
   };
 
   return (
-    <Paper elevation={3} sx={{ p: 3, maxWidth: 500, mx: 'auto', my: 2 }}>
-      <Typography variant="h5" component="h2" gutterBottom align="center">
-        Add Money
-      </Typography>
-      
-      <Typography variant="subtitle1" gutterBottom>
-        Current Balance: ₹{balance || 0}
-      </Typography>
+    <Card variant="default" className="max-w-xl mx-auto">
+      <div className="text-center mb-8">
+        <h2 className="text-2xl font-bold text-deep-purple mb-2">Add Money</h2>
+        <p className="text-muted-violet">Current Balance: <span className="font-semibold">₹{balance || 0}</span></p>
+      </div>
       
       {paymentStep === 'select' ? (
         <>
-          <Box sx={{ mb: 3 }}>
-            <Typography variant="subtitle1" gutterBottom>
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-deep-purple mb-2">
               Select Amount:
-            </Typography>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
+            </label>
+            <div className="grid grid-cols-3 gap-2 mb-4">
               {DEPOSIT_AMOUNTS.map((value) => (
                 <Button 
                   key={value}
-                  variant={amount === value ? "contained" : "outlined"}
+                  variant={amount === value ? "primary" : "outline"}
                   onClick={() => handleAmountSelect(value)}
-                  sx={{ minWidth: '80px', flexGrow: 1 }}
+                  className="h-12"
                 >
                   ₹{value}
                 </Button>
               ))}
-            </Box>
+            </div>
             
-            <TextField
-              label="Custom Amount"
-              value={customAmount}
-              onChange={handleCustomAmountChange}
-              fullWidth
-              variant="outlined"
-              placeholder="Enter amount"
-              sx={{ mt: 2 }}
-              InputProps={{
-                startAdornment: <Box component="span" sx={{ mr: 1 }}>₹</Box>,
-              }}
-            />
-          </Box>
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-deep-purple mb-2">
+                Custom Amount:
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <span className="text-gray-500">₹</span>
+                </div>
+                <input
+                  type="text"
+                  value={customAmount}
+                  onChange={handleCustomAmountChange}
+                  className="block w-full pl-7 pr-12 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-soft-pink focus:border-soft-pink"
+                  placeholder="Enter amount"
+                />
+              </div>
+            </div>
+          </div>
           
-          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+          {error && (
+            <div className="bg-red-50 border-l-4 border-red-400 p-4 mb-4">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <i className="fas fa-exclamation-circle text-red-400"></i>
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm text-red-700">{error}</p>
+                </div>
+              </div>
+            </div>
+          )}
           
           <Button 
-            variant="contained" 
-            color="primary" 
-            fullWidth
+            variant="cta" 
             size="large"
+            fullWidth
             onClick={handleProceedToPayment}
             disabled={amount <= 0}
+            rightIcon={<i className="fas fa-arrow-right"></i>}
+            className="mt-4"
           >
             Proceed to Payment
           </Button>
         </>
       ) : (
         <>
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', my: 2 }}>
-            <Typography variant="subtitle1" gutterBottom align="center">
-              Scan QR code to pay ₹{amount}
-            </Typography>
+          <div className="flex flex-col items-center mb-6">
+            <div className="text-center mb-4">
+              <p className="text-lg font-medium text-deep-purple mb-1">
+                Scan QR code to pay ₹{amount}
+              </p>
+              <p className="text-sm text-gray-500">
+                Use any UPI app like Google Pay, PhonePe, Paytm, etc.
+              </p>
+            </div>
             
-            <Box sx={{ p: 2, bgcolor: 'white', borderRadius: 1, mb: 2 }}>
+            <div className="bg-white p-4 rounded-lg shadow-md mb-6">
               <QRCode value={getUpiString()} size={200} />
-            </Box>
+            </div>
             
-            <Typography variant="body2" color="textSecondary" align="center" sx={{ mb: 2 }}>
-              After payment, enter the UPI transaction ID from your payment app
-            </Typography>
-            
-            <TextField
-              label="UPI Transaction ID"
-              value={upiTransactionId}
-              onChange={(e) => setUpiTransactionId(e.target.value)}
-              fullWidth
-              variant="outlined"
-              sx={{ mb: 2 }}
-            />
-          </Box>
+            <div className="w-full max-w-md mb-4">
+              <label className="block text-sm font-medium text-deep-purple mb-2">
+                UPI Transaction ID:
+              </label>
+              <input
+                type="text"
+                value={upiTransactionId}
+                onChange={(e) => setUpiTransactionId(e.target.value)}
+                className="block w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-soft-pink focus:border-soft-pink"
+                placeholder="Enter the transaction ID from your payment app"
+              />
+              <p className="mt-1 text-sm text-gray-500">
+                You can find this in the transaction details of your UPI app
+              </p>
+            </div>
+          </div>
           
-          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-          {success && <Alert severity="success" sx={{ mb: 2 }}>Deposit successful!</Alert>}
+          {error && (
+            <div className="bg-red-50 border-l-4 border-red-400 p-4 mb-4">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <i className="fas fa-exclamation-circle text-red-400"></i>
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm text-red-700">{error}</p>
+                </div>
+              </div>
+            </div>
+          )}
           
-          <Box sx={{ display: 'flex', gap: 2 }}>
+          {success && (
+            <div className="bg-green-50 border-l-4 border-green-400 p-4 mb-4">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <i className="fas fa-check-circle text-green-400"></i>
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm text-green-700">Deposit successful! Your balance has been updated.</p>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          <div className="flex gap-4">
             <Button 
-              variant="outlined" 
-              color="secondary" 
+              variant="outline" 
               onClick={handleCancel}
               disabled={loading}
-              sx={{ flexGrow: 1 }}
+              leftIcon={<i className="fas fa-arrow-left"></i>}
+              className="flex-1"
             >
-              Cancel
+              Back
             </Button>
             <Button 
-              variant="contained" 
-              color="primary" 
+              variant="primary" 
               onClick={handleConfirmDeposit}
               disabled={loading || success}
-              sx={{ flexGrow: 1 }}
+              isLoading={loading}
+              className="flex-1"
             >
-              {loading ? <CircularProgress size={24} /> : 'Confirm Deposit'}
+              Confirm Deposit
             </Button>
-          </Box>
+          </div>
         </>
       )}
       
-      <Typography variant="body2" color="textSecondary" align="center" sx={{ mt: 3 }}>
+      <div className="mt-8 pt-4 border-t border-gray-100 text-xs text-center text-gray-500">
         Note: This is a simulated payment flow for demonstration purposes.
         In a production environment, a secure payment gateway would be used.
-      </Typography>
-    </Paper>
+      </div>
+    </Card>
   );
 }; 

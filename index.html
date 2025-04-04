@@ -48,6 +48,40 @@
         font-family: 'Poppins', sans-serif;
       }
       
+      /* Pulsing animation for CTA */
+      @keyframes pulse-soft {
+        0% {
+          box-shadow: 0 0 0 0 rgba(224, 177, 203, 0.7);
+        }
+        70% {
+          box-shadow: 0 0 0 10px rgba(224, 177, 203, 0);
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(224, 177, 203, 0);
+        }
+      }
+      
+      .pulse-animation {
+        animation: pulse-soft 2s infinite;
+      }
+      
+      /* Floating animation for CTA */
+      @keyframes float {
+        0% {
+          transform: translateY(0px);
+        }
+        50% {
+          transform: translateY(-5px);
+        }
+        100% {
+          transform: translateY(0px);
+        }
+      }
+      
+      .float-animation {
+        animation: float 3s ease-in-out infinite;
+      }
+      
       /* Gam(e)Bit custom colors */
       :root {
         --deep-purple: #231942;

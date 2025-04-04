@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Box, Button, TextField, Typography, Paper, CircularProgress, Alert } from '@mui/material';
 import { requestWithdrawal } from '../../services/transactionService';
 import { useAuth } from '../../hooks/useAuth';
 import { toast } from 'react-hot-toast';
+import Card from '../common/Card';
+import Button from '../common/Button';
 
 const WITHDRAWAL_AMOUNTS = [100, 200, 500, 1000, 2000, 5000];
 
@@ -95,96 +96,140 @@ export const WithdrawalForm: React.FC = () => {
   };
 
   return (
-    <Paper elevation={3} sx={{ p: 3, maxWidth: 500, mx: 'auto', my: 2 }}>
-      <Typography variant="h5" component="h2" gutterBottom align="center">
-        Withdraw Money
-      </Typography>
+    <Card variant="default" className="max-w-xl mx-auto">
+      <div className="text-center mb-8">
+        <h2 className="text-2xl font-bold text-deep-purple mb-2">Withdraw Money</h2>
+        <p className="text-muted-violet">Get your winnings to your bank account</p>
+      </div>
       
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="subtitle1" gutterBottom>
-          Total Balance: ₹{balance || 0}
-        </Typography>
-        <Typography variant="subtitle1" gutterBottom sx={{ color: 'success.main', fontWeight: 'bold' }}>
-          Withdrawable Balance: ₹{withdrawableBalance || 0}
-        </Typography>
-        <Typography variant="body2" sx={{ mt: 1, mb: 2, color: 'text.secondary' }}>
-          You can only withdraw money that you've won in games. Deposits and initial balance cannot be withdrawn.
-        </Typography>
-        {(pendingWithdrawalAmount || 0) > 0 && (
-          <Typography variant="subtitle2" color="text.secondary">
-            Pending Withdrawal: ₹{pendingWithdrawalAmount}
-          </Typography>
-        )}
-      </Box>
+      {/* Balance Information */}
+      <div className="bg-soft-lavender/10 rounded-lg p-4 mb-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between">
+          <div>
+            <p className="text-sm text-muted-violet mb-1">Total Balance</p>
+            <p className="text-xl font-bold text-deep-purple">₹{balance || 0}</p>
+          </div>
+          <div className="mt-3 md:mt-0 md:text-right">
+            <p className="text-sm text-muted-violet mb-1">Withdrawable Balance</p>
+            <p className="text-xl font-bold text-soft-pink">₹{withdrawableBalance || 0}</p>
+          </div>
+        </div>
+        <div className="mt-3 pt-3 border-t border-soft-lavender/20">
+          <p className="text-xs text-gray-600">You can only withdraw winnings from games. Deposited amounts are for gameplay only.</p>
+          {(pendingWithdrawalAmount || 0) > 0 && (
+            <div className="mt-2 py-2 px-3 bg-muted-violet/10 rounded text-sm">
+              <p className="flex items-center text-muted-violet">
+                <i className="fas fa-clock mr-2"></i>
+                Pending Withdrawal: <span className="font-medium ml-1">₹{pendingWithdrawalAmount}</span>
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
       
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="subtitle1" gutterBottom>
+      {/* Amount Selection */}
+      <div className="mb-6">
+        <label className="block text-sm font-medium text-deep-purple mb-2">
           Select Amount:
-        </Typography>
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
+        </label>
+        <div className="grid grid-cols-3 gap-2 mb-4">
           {WITHDRAWAL_AMOUNTS.map((value) => (
             <Button 
               key={value}
-              variant={amount === value ? "contained" : "outlined"}
+              variant={amount === value ? "primary" : "outline"}
               onClick={() => handleAmountSelect(value)}
-              sx={{ minWidth: '80px', flexGrow: 1 }}
+              className="h-12"
               disabled={value > withdrawableBalance}
             >
               ₹{value}
             </Button>
           ))}
-        </Box>
+        </div>
         
-        <TextField
-          label="Custom Amount"
-          value={customAmount}
-          onChange={handleCustomAmountChange}
-          fullWidth
-          variant="outlined"
-          placeholder="Enter amount"
-          sx={{ mt: 2, mb: 3 }}
-          InputProps={{
-            startAdornment: <Box component="span" sx={{ mr: 1 }}>₹</Box>,
-          }}
-        />
-        
-        <Typography variant="subtitle1" gutterBottom>
-          UPI ID:
-        </Typography>
-        <TextField
-          label="Your UPI ID"
+        <div className="mt-4">
+          <label className="block text-sm font-medium text-deep-purple mb-2">
+            Custom Amount:
+          </label>
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <span className="text-gray-500">₹</span>
+            </div>
+            <input
+              type="text"
+              value={customAmount}
+              onChange={handleCustomAmountChange}
+              className="block w-full pl-7 pr-12 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-soft-pink focus:border-soft-pink"
+              placeholder="Enter amount"
+            />
+          </div>
+          <p className="mt-1 text-xs text-gray-500">Maximum: ₹{withdrawableBalance}</p>
+        </div>
+      </div>
+      
+      {/* UPI ID Input */}
+      <div className="mb-6">
+        <label className="block text-sm font-medium text-deep-purple mb-2">
+          Your UPI ID:
+        </label>
+        <input
+          type="text"
           value={upiId}
           onChange={handleUpiIdChange}
-          fullWidth
-          variant="outlined"
+          className="block w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-soft-pink focus:border-soft-pink"
           placeholder="username@provider"
-          sx={{ mb: 1 }}
         />
-        <Typography variant="caption" color="text.secondary">
-          Enter your UPI ID in the format username@provider
-        </Typography>
-      </Box>
+        <p className="mt-1 text-xs text-gray-500">
+          Enter your UPI ID in the format username@provider (e.g., yourname@okicici)
+        </p>
+      </div>
       
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-      {success && <Alert severity="success" sx={{ mb: 2 }}>
-        Withdrawal request submitted! Our team will process it within 24 hours.
-      </Alert>}
+      {/* Error/Success Messages */}
+      {error && (
+        <div className="bg-red-50 border-l-4 border-red-400 p-4 mb-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <i className="fas fa-exclamation-circle text-red-400"></i>
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          </div>
+        </div>
+      )}
       
+      {success && (
+        <div className="bg-green-50 border-l-4 border-green-400 p-4 mb-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <i className="fas fa-check-circle text-green-400"></i>
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-green-700">
+                Withdrawal request submitted! Our team will process it within 24 hours.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Submit Button */}
       <Button 
-        variant="contained" 
-        color="primary" 
-        fullWidth
+        variant="cta" 
         size="large"
+        fullWidth
         onClick={handleWithdrawalRequest}
         disabled={loading || success || amount <= 0 || amount > withdrawableBalance}
+        isLoading={loading}
+        className="mt-4"
       >
-        {loading ? <CircularProgress size={24} /> : 'Request Withdrawal'}
+        Request Withdrawal
       </Button>
       
-      <Typography variant="body2" color="textSecondary" align="center" sx={{ mt: 3 }}>
+      {/* Footer Note */}
+      <div className="mt-8 pt-4 border-t border-gray-100 text-xs text-center text-gray-500">
         Note: Withdrawals are processed manually within 24 hours. 
         You will receive money at your provided UPI ID.
-      </Typography>
-    </Paper>
+      </div>
+    </Card>
   );
 }; 

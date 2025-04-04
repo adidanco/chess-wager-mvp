@@ -1,6 +1,6 @@
 import React, { ButtonHTMLAttributes } from 'react';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'text';
+export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'text' | 'cta';
 export type ButtonSize = 'small' | 'medium' | 'large';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -46,7 +46,10 @@ const Button: React.FC<ButtonProps> = ({
     outline: "border border-muted-violet text-muted-violet hover:bg-muted-violet/10 active:bg-muted-violet/20 focus:ring-muted-violet", 
     
     // Text button: No background, just text
-    text: "text-muted-violet hover:bg-muted-violet/10 active:bg-muted-violet/20 focus:ring-muted-violet"
+    text: "text-muted-violet hover:bg-muted-violet/10 active:bg-muted-violet/20 focus:ring-muted-violet",
+    
+    // CTA button: High-impact call to action with gradient, shadow and scale effect
+    cta: "bg-gradient-to-r from-soft-pink to-muted-violet text-white shadow-lg hover:shadow-xl hover:scale-105 active:scale-100 focus:ring-soft-pink"
   };
   
   // Width class

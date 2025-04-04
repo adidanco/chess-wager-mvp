@@ -91,7 +91,7 @@ const Onboarding: React.FC<OnboardingProps> = ({
   */
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-gradient-to-br from-off-white to-soft-lavender/20 z-40">
+    <div className="fixed inset-0 flex flex-col bg-gradient-to-br from-deep-purple/5 via-off-white to-soft-pink/10 z-40">
       {/* Progress indicators */}
       <div className="flex justify-center mt-8 px-4">
         {slides.map((_, index) => (
@@ -144,14 +144,17 @@ const Onboarding: React.FC<OnboardingProps> = ({
               Skip
             </Button>
           )}
-          <Button 
-            variant="primary" 
-            onClick={handleNext}
-            className="w-full sm:w-auto"
-            size="large"
-          >
-            {isLastSlide ? 'Get Started' : 'Continue'}
-          </Button>
+          <div className="float-animation">
+            <Button 
+              variant="cta" 
+              onClick={handleNext}
+              className="w-full sm:w-auto font-bold text-lg py-3.5 px-8 pulse-animation"
+              size="large"
+              rightIcon={<i className="fas fa-arrow-right"></i>}
+            >
+              {isLastSlide ? 'Get Started' : 'Continue'}
+            </Button>
+          </div>
         </div>
         
         {/* Back button for mobile only */}
