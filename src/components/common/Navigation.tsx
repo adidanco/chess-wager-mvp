@@ -95,6 +95,17 @@ const Navigation: React.FC = () => {
                 Logout
               </span>
             )}
+            
+            {/* Design System link in development mode */}
+            {process.env.NODE_ENV === 'development' && (
+              <span
+                onClick={() => navigateTo('/design-system')}
+                className="cursor-pointer py-1 px-3 bg-soft-pink text-white rounded-full hover:bg-soft-pink/90 transition-colors ml-2"
+              >
+                <i className="fas fa-palette mr-2"></i>
+                Design System
+              </span>
+            )}
           </div>
 
           {/* Mobile Menu Button */}
@@ -137,6 +148,17 @@ const Navigation: React.FC = () => {
               >
                 <i className="fas fa-sign-out-alt mr-3 w-6 text-center"></i>
                 Logout
+              </div>
+            )}
+            
+            {/* Design System link in mobile menu (development mode only) */}
+            {process.env.NODE_ENV === 'development' && (
+              <div
+                onClick={() => navigateTo('/design-system')}
+                className="cursor-pointer px-4 py-2 mt-2 text-white bg-soft-pink/20 hover:bg-soft-pink/30 rounded-md"
+              >
+                <i className="fas fa-palette mr-3 w-6 text-center"></i>
+                Design System
               </div>
             )}
           </div>

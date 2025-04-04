@@ -1,4 +1,5 @@
 import React from "react";
+import Button from "../common/Button";
 
 /**
  * Interface for GameActions props
@@ -12,6 +13,7 @@ interface GameActionsProps {
 
 /**
  * Component for game action buttons on the home page
+ * Updated to use the Gam(e)Bit button component
  */
 const GameActions = ({ 
   onCreateGame, 
@@ -20,31 +22,48 @@ const GameActions = ({
   onLogout 
 }: GameActionsProps): JSX.Element => {
   return (
-    <div className="space-y-4">
-      <button
+    <div className="space-y-3">
+      <Button
+        variant="primary"
+        size="large"
+        fullWidth
         onClick={onCreateGame}
-        className="w-full bg-blue-500 text-white py-3 px-4 rounded-md text-lg font-medium hover:bg-blue-600 transition-colors shadow-md"
+        leftIcon={<i className="fas fa-gamepad"></i>}
       >
         Choose Game
-      </button>
-      <button
+      </Button>
+      
+      <Button
+        variant="secondary"
+        size="large"
+        fullWidth
         onClick={onJoinGame}
-        className="w-full bg-green-500 text-white py-3 px-4 rounded-md text-lg font-medium hover:bg-green-600 transition-colors shadow-md"
+        leftIcon={<i className="fas fa-sign-in-alt"></i>}
       >
         Join Game
-      </button>
-      <button
+      </Button>
+      
+      <Button
+        variant="outline"
+        size="large"
+        fullWidth
         onClick={onSettings}
-        className="w-full bg-purple-500 text-white py-3 px-4 rounded-md text-lg font-medium hover:bg-purple-600 transition-colors shadow-md"
+        leftIcon={<i className="fas fa-cog"></i>}
+        className="border-white text-white hover:bg-white/20"
       >
         Settings
-      </button>
-      <button
+      </Button>
+      
+      <Button
+        variant="text"
+        size="large"
+        fullWidth
         onClick={onLogout}
-        className="w-full bg-red-500 text-white py-3 px-4 rounded-md text-lg font-medium hover:bg-red-600 transition-colors shadow-md"
+        leftIcon={<i className="fas fa-sign-out-alt"></i>}
+        className="text-white hover:bg-white/20"
       >
         Logout
-      </button>
+      </Button>
     </div>
   );
 };

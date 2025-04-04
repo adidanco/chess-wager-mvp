@@ -13,6 +13,7 @@ import { logger } from "./utils/logger"
 import SplashScreen from "./components/common/SplashScreen"
 import Onboarding from "./components/common/Onboarding"
 import onboardingSlides from "./constants/onboardingConfig"
+import CardShowcase from "./components/ui/CardShowcase"
 
 // Pages
 import Home from "./pages/Home"
@@ -36,6 +37,7 @@ import CreateScambodiaGame from "./pages/CreateScambodiaGame"
 import ComingSoon from "./pages/ComingSoon"
 import RangvaarLobby from "./pages/RangvaarLobby"
 import RangvaarGame from "./pages/RangvaarGame"
+import DesignSystem from "./pages/DesignSystem"
 
 // Wrap Firestore operations with network check
 const withNetworkCheck = async <T,>(operation: () => Promise<T>): Promise<T> => {
@@ -142,6 +144,8 @@ const AppContent = () => {
           <Route path="/test-constants" element={<TestConstants />} />
           <Route path="/terms-and-conditions" element={<TermsAndConditions />} />
           <Route path="/contact-us" element={<ContactUs />} />
+          <Route path="/design/cards" element={<CardShowcase />} />
+          <Route path="/design-system" element={<DesignSystem />} />
         </Routes>
         {isDev && (
           <button 

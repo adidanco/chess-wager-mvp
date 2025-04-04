@@ -9,6 +9,8 @@ import BalanceDisplay from "../components/home/BalanceDisplay"
 import GameActions from "../components/home/GameActions"
 import LoadingSpinner from "../components/common/LoadingSpinner"
 import PageLayout from "../components/common/PageLayout"
+import Card from "../components/common/Card"
+import Button from "../components/common/Button"
 import { useAuth } from "../context/AuthContext"
 
 export default function Home(): JSX.Element {
@@ -233,14 +235,16 @@ export default function Home(): JSX.Element {
         )}
         
         {/* User welcome card */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <div 
-            className="flex items-center justify-between cursor-pointer hover:bg-gray-50 p-2 rounded-md transition-colors"
-            onClick={handleProfile}
-          >
+        <Card
+          variant="default"
+          className="mb-6"
+          isHoverable
+          onClick={handleProfile}
+        >
+          <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-bold">Welcome, {userProfile.username}!</h2>
-              <p className="text-sm text-gray-500">Tap to view profile</p>
+              <h2 className="text-xl font-bold text-deep-purple">Welcome, {userProfile.username}!</h2>
+              <p className="text-sm text-muted-violet">Tap to view profile</p>
             </div>
             <div className="flex items-center justify-center w-12 h-12 bg-gray-200 rounded-full overflow-hidden">
               {userProfile.photoURL ? (
@@ -252,22 +256,39 @@ export default function Home(): JSX.Element {
               )}
             </div>
           </div>
-        </div>
+        </Card>
         
         {/* Balance display */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+        <Card
+          variant="accent"
+          className="mb-6"
+          title="Your Balance"
+          footer={
+            <button 
+              onClick={() => navigate('/wallet')} 
+              className="text-muted-violet hover:text-deep-purple text-sm font-medium flex items-center justify-center w-full"
+            >
+              Manage Wallet <i className="fas fa-chevron-right ml-1 text-xs"></i>
+            </button>
+          }
+        >
           <BalanceDisplay balance={balance} />
-        </div>
+        </Card>
         
-        {/* Game action buttons */}
-        <div className="mb-6">
-          <GameActions 
-            onCreateGame={handleChooseGame} 
+        {/* Game actions */}
+        <Card
+          variant="primary"
+          className="mb-6"
+          title="Game Options"
+          titleAction={<i className="fas fa-gamepad text-white"></i>}
+        >
+          <GameActions
+            onCreateGame={handleChooseGame}
             onJoinGame={handleJoinGame}
             onSettings={handleSettings}
             onLogout={handleLogout}
           />
-        </div>
+        </Card>
       </div>
     </PageLayout>
   )
