@@ -37,6 +37,8 @@ import CreateScambodiaGame from "./pages/CreateScambodiaGame"
 import ComingSoon from "./pages/ComingSoon"
 import RangvaarLobby from "./pages/RangvaarLobby"
 import RangvaarGame from "./pages/RangvaarGame"
+import ScambodiaLobby from "./pages/ScambodiaLobby"
+import ScambodiaGame from "./pages/ScambodiaGame"
 import DesignSystem from "./pages/DesignSystem"
 
 // Wrap Firestore operations with network check
@@ -136,6 +138,8 @@ const AppContent = () => {
           <Route path="/game/rangvaar/:gameId" element={<RangvaarLobby />} />
           <Route path="/game/rangvaar/play/:gameId" element={<RangvaarGame />} />
           <Route path="/create-scambodia-game" element={<CreateScambodiaGame />} />
+          <Route path="/game/scambodia/:gameId" element={<ScambodiaLobby />} />
+          <Route path="/game/scambodia/play/:gameId" element={<ScambodiaGame />} />
           <Route path="/coming-soon" element={<ComingSoon />} />
           <Route path="/join-game" element={<JoinGame />} />
           <Route path="/available-games" element={<AvailableGames />} />

@@ -49,7 +49,7 @@ export default function CreateScambodiaGame(): JSX.Element {
       
       logger.info('CreateScambodiaGame', 'Game created successfully', { gameId });
       toast.success('Game created successfully!');
-      navigate(`/scambodia-lobby/${gameId}`);
+      navigate(`/game/scambodia/${gameId}`);
     } catch (error) {
       const err = error as Error;
       logger.error('CreateScambodiaGame', 'Failed to create game', { error: err });
