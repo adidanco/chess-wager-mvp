@@ -9,6 +9,9 @@ import { CardPosition, Card } from '../types/scambodia';
 // Import our implemented components
 import GameBoard from '../components/scambodia/GameBoard';
 import GameControls from '../components/scambodia/GameControls';
+import GameStatus from '../components/scambodia/GameStatus';
+import SpecialPower from '../components/scambodia/SpecialPower';
+import GameOverDisplay from '../components/scambodia/GameOverDisplay';
 
 // Note: Some components are not fully implemented yet
 // import SpecialPower from '../components/scambodia/SpecialPower';
@@ -39,6 +42,8 @@ export default function ScambodiaGame(): JSX.Element {
   const [drawnCard, setDrawnCard] = useState<Card | null>(null);
   const [hasDrawnCard, setHasDrawnCard] = useState(false);
   const [drawnFromDiscard, setDrawnFromDiscard] = useState(false);
+  const [showSpecialPower, setShowSpecialPower] = useState(false);
+  const [specialCard, setSpecialCard] = useState<Card | null>(null);
 
   // Action handler with loading state management
   const handleAction = async (actionFn: () => Promise<void>) => {
@@ -100,9 +105,16 @@ export default function ScambodiaGame(): JSX.Element {
   const handleDiscardDrawnCard = async () => {
     await handleAction(async () => {
       await discardDrawnCard();
-      setHasDrawnCard(false);
-      setDrawnCard(null);
-      setDrawnFromDiscard(false);
+      
+      // Simulate showing special power if card is face (J, Q, K)
+      if (drawnCard && ['J', 'Q', 'K'].includes(drawnCard.rank)) {
+        setSpecialCard(drawnCard);
+        setShowSpecialPower(true);
+      } else {
+        setHasDrawnCard(false);
+        setDrawnCard(null);
+        setDrawnFromDiscard(false);
+      }
     });
   };
 
@@ -120,6 +132,27 @@ export default function ScambodiaGame(): JSX.Element {
     await handleAction(async () => {
       await declareScambodia();
     });
+  };
+
+  const handleUseSpecialPower = async () => {
+    await handleAction(async () => {
+      if (specialCard) {
+        // In a real implementation, we'd call usePower with the correct parameters
+        await usePower('Peek_Opponent', { cardIndex: 0 });
+      }
+      setShowSpecialPower(false);
+      setSpecialCard(null);
+      setHasDrawnCard(false);
+      setDrawnCard(null);
+    });
+  };
+
+  const handleSkipSpecialPower = () => {
+    setShowSpecialPower(false);
+    setSpecialCard(null);
+    setHasDrawnCard(false);
+    setDrawnCard(null);
+    setDrawnFromDiscard(false);
   };
 
   // Loading state
@@ -153,22 +186,10 @@ export default function ScambodiaGame(): JSX.Element {
   // Game finished state
   if (gameState.status === 'Finished') {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-4">
-        <div className="text-center p-8 bg-white shadow-lg rounded-lg">
-          <h2 className="text-2xl font-bold mb-4">Game Over</h2>
-          <p className="mb-4">
-            {gameState.gameWinnerId === currentPlayerId 
-              ? '🎉 Congratulations! You won the game!' 
-              : `Game won by ${gameState.players.find(p => p.userId === gameState.gameWinnerId)?.username || 'Unknown'}`}
-          </p>
-          <button 
-            onClick={() => navigate('/choose-game')} 
-            className="bg-deep-purple text-white px-4 py-2 rounded hover:bg-soft-pink"
-          >
-            Back to Games
-          </button>
-        </div>
-      </div>
+      <GameOverDisplay
+        gameState={gameState}
+        currentUserId={currentPlayerId || ''}
+      />
     );
   }
   
@@ -221,15 +242,11 @@ export default function ScambodiaGame(): JSX.Element {
 
       {/* Game Status Header */}
       <div className="p-2 bg-white border-b border-gray-300 shadow-sm z-10">
-        <div className="text-center">
-          <h2 className="text-xl font-bold text-deep-purple">Scambodia Game</h2>
-          <p className="text-sm text-gray-600">
-            Round {gameState.currentRoundNumber + 1} of {gameState.totalRounds} | 
-            Phase: {currentRound.phase} | 
-            {isMyTurn ? <span className="text-green-600 font-bold"> Your Turn</span> : 
-              <span className="text-gray-600"> Waiting for {gameState.players.find(p => p.userId === currentRound.currentTurnPlayerId)?.username || 'other player'}</span>}
-          </p>
-        </div>
+        <GameStatus
+          gameState={gameState}
+          currentUserId={currentPlayerId || ''}
+          isMyTurn={isMyTurn}
+        />
       </div>
 
       {/* Game Board with Player's Hand and Opponents */}
@@ -259,10 +276,20 @@ export default function ScambodiaGame(): JSX.Element {
           onDiscardDrawnCard={handleDiscardDrawnCard}
           onAttemptMatch={handleAttemptMatch}
           onDeclareScambodia={handleDeclareScambodia}
-          onUseSpecialPower={() => {}}
+          onUseSpecialPower={handleUseSpecialPower}
           canDeclareScambodia={canDeclareScambodia}
         />
       </div>
+
+      {/* Special Power Modal */}
+      {showSpecialPower && specialCard && (
+        <SpecialPower
+          specialCard={specialCard}
+          isSubmitting={isSubmittingAction}
+          onUseSpecialPower={handleUseSpecialPower}
+          onSkipSpecialPower={handleSkipSpecialPower}
+        />
+      )}
     </div>
   );
 } 
