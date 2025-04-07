@@ -59,28 +59,30 @@ const CardComponent: React.FC<CardComponentProps> = ({
     );
   }
 
+  // Determine if card should be showing front or back
+  const shouldShowFront = faceUp || isPeeking;
+
   return (
     <div
       onClick={disabled ? undefined : onClick}
       className={`
-        w-20 h-28 perspective-500 cursor-pointer transition-transform duration-200
+        w-20 h-28 card-container cursor-pointer transition-transform duration-200
         ${disabled ? 'opacity-60 cursor-not-allowed' : 'hover:scale-105'}
         ${isSelected ? 'ring-2 ring-offset-2 ring-deep-purple' : ''}
         ${getPositionClass()}
+        ${shouldShowFront ? 'card-flipped' : ''}
       `}
     >
-      <div className={`relative w-full h-full transition-all duration-500 transform-style-3d ${isPeeking || faceUp ? 'rotate-y-180' : ''}`}>
+      <div className="card-inner">
         {/* Card Back */}
-        <div className="absolute w-full h-full backface-hidden bg-gradient-to-br from-deep-purple to-soft-pink rounded-lg shadow-md">
-          <div className="absolute inset-1 bg-white rounded-lg flex items-center justify-center">
-            <div className="w-12 h-16 bg-soft-lavender rounded-md flex items-center justify-center">
-              <span className="text-deep-purple font-bold text-xl">S</span>
-            </div>
+        <div className="card-back">
+          <div className="w-12 h-16 bg-soft-lavender rounded-md flex items-center justify-center">
+            <span className="text-deep-purple font-bold text-xl">S</span>
           </div>
         </div>
 
         {/* Card Front */}
-        <div className="absolute w-full h-full backface-hidden rotate-y-180 bg-white rounded-lg shadow-md border border-gray-200">
+        <div className="card-front">
           {card ? (
             <div className="w-full h-full p-1 flex flex-col">
               {/* Card Value/Suit in Top Left */}
