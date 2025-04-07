@@ -26,7 +26,7 @@ const GameActions = ({
       {/* Primary Game Actions */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <InfoCard
-          title="Choose Game"
+          title="Create Game"
           description="Create a new game room and invite friends to play"
           icon="fa-gamepad"
           iconBgColor="bg-deep-purple"

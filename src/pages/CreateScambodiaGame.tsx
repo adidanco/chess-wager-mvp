@@ -1,153 +1,200 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'react-hot-toast';
-import PageLayout from '../components/common/PageLayout';
-import LoadingSpinner from '../components/common/LoadingSpinner';
+import { useAuth } from '../context/AuthContext';
 import Card from '../components/common/Card';
 import Button from '../components/common/Button';
+import LoadingSpinner from '../components/common/LoadingSpinner';
+import PageLayout from '../components/common/PageLayout';
+import { toast } from 'react-hot-toast';
 import { createScambodiaGame } from '../services/scambodiaService';
-import { useAuth } from '../context/AuthContext';
 import { logger } from '../utils/logger';
+import RulesModal from '../components/common/RulesModal';
+import { scambodiaRules } from '../data/gameRules';
 
 export default function CreateScambodiaGame(): JSX.Element {
+  const { currentUser } = useAuth();
   const navigate = useNavigate();
-  const { currentUser, loading: authLoading, isAuthenticated } = useAuth();
   
-  // Form state
-  const [wagerAmount, setWagerAmount] = useState<number>(10);
+  const [wagerAmount, setWagerAmount] = useState<number>(50);
   const [totalRounds, setTotalRounds] = useState<1 | 3 | 5>(3);
   const [creating, setCreating] = useState<boolean>(false);
-  
-  // Redirect if not authenticated
-  React.useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
+  const [tokenRefreshed, setTokenRefreshed] = useState<boolean>(false);
+  const [showRules, setShowRules] = useState<boolean>(false);
+
+  // Check authentication
+  useEffect(() => {
+    if (!currentUser) {
+      logger.warn('CreateScambodiaGame', 'No user authenticated, redirecting to login');
+      toast.error('Please login to create a game');
       navigate('/login');
+    } else {
+      // Refresh token on component mount to ensure fresh authentication
+      currentUser.getIdToken(true)
+        .then(() => {
+          setTokenRefreshed(true);
+          logger.info('CreateScambodiaGame', 'Token refreshed successfully');
+        })
+        .catch(err => {
+          logger.error('CreateScambodiaGame', 'Failed to refresh token', { error: err });
+          toast.error('Authentication error. Please log out and log back in.');
+        });
     }
-  }, [authLoading, isAuthenticated, navigate]);
-  
-  // Handle form submission
-  const handleSubmit = useCallback(async (e: React.FormEvent) => {
+  }, [currentUser, navigate]);
+
+  const handleCreateGame = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!currentUser) {
-      toast.error('You must be logged in to create a game');
+      toast.error('Please login to create a game');
+      navigate('/login');
       return;
     }
     
-    if (wagerAmount <= 0) {
-      toast.error('Wager amount must be greater than 0');
+    if (!tokenRefreshed) {
+      toast.error('Still initializing. Please try again in a moment.');
       return;
     }
     
     setCreating(true);
+    
     try {
-      const gameId = await createScambodiaGame(
-        currentUser.uid,
-        wagerAmount,
-        totalRounds
-      );
+      // Perform one more token refresh for extra security
+      await currentUser.getIdToken(true);
+      
+      // Validate inputs
+      if (wagerAmount < 10) {
+        throw new Error('Minimum wager is ₹10');
+      }
+      
+      logger.info('CreateScambodiaGame', 'Creating new game', { 
+        userId: currentUser.uid, 
+        wagerAmount, 
+        totalRounds 
+      });
+      
+      // Create the game
+      const gameId = await createScambodiaGame(currentUser.uid, wagerAmount, totalRounds);
       
       logger.info('CreateScambodiaGame', 'Game created successfully', { gameId });
-      toast.success('Game created successfully!');
+      
+      toast.success('Game created! Redirecting to game lobby...');
       navigate(`/game/scambodia/${gameId}`);
-    } catch (error) {
+    } catch (error: any) {
       const err = error as Error;
       logger.error('CreateScambodiaGame', 'Failed to create game', { error: err });
-      toast.error(`Failed to create game: ${err.message}`);
+      
+      // Provide specific error messages based on the error type
+      if (err.message?.includes('permission-denied')) {
+        toast.error('Authentication error. Please log out and log back in.');
+      } else if (err.message?.includes('insufficient balance')) {
+        toast.error('Insufficient balance. Please add funds to your account.');
+      } else {
+        toast.error(err.message || 'Failed to create game. Please try again.');
+      }
     } finally {
       setCreating(false);
     }
-  }, [currentUser, wagerAmount, totalRounds, navigate]);
-  
-  // Show loading if auth is loading
-  if (authLoading) {
-    return (
-      <PageLayout>
-        <div className="flex justify-center items-center h-64">
-          <LoadingSpinner message="Loading..." />
-        </div>
-      </PageLayout>
-    );
-  }
+  };
 
   return (
     <PageLayout>
       <div className="container mx-auto px-4 py-8 max-w-md">
-        <h1 className="text-2xl font-bold mb-6 text-center text-deep-purple">Create Scambodia Game</h1>
+        <h1 className="text-2xl font-bold mb-6 text-center text-deep-purple">
+          Create Scambodia Game
+        </h1>
         
         <Card variant="default" className="p-6">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-1">
-              <label className="block text-sm font-medium text-gray-700">Wager Amount</label>
-              <div className="relative">
-                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500">
-                  ₹
-                </span>
-                <input
-                  type="number"
-                  min="10"
-                  step="10"
-                  value={wagerAmount}
-                  onChange={(e) => setWagerAmount(Number(e.target.value))}
-                  className="block w-full border border-gray-300 rounded-md shadow-sm pl-8 p-2 focus:ring-deep-purple focus:border-deep-purple"
-                  required
-                />
-              </div>
-              <p className="text-xs text-gray-500">
-                This is the amount each player will wager to join the game.
+          <form onSubmit={handleCreateGame}>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Wager Amount (₹ per player)
+              </label>
+              <input
+                type="number"
+                min="10"
+                max="1000"
+                value={wagerAmount}
+                onChange={(e) => setWagerAmount(Number(e.target.value))}
+                className="w-full p-2 border border-gray-300 rounded-md"
+                required
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Min: ₹10, Max: ₹1,000
               </p>
             </div>
             
-            <div className="space-y-1">
-              <label className="block text-sm font-medium text-gray-700">Number of Rounds</label>
-              <select
-                value={totalRounds}
-                onChange={(e) => setTotalRounds(Number(e.target.value) as 1 | 3 | 5)}
-                className="block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-deep-purple focus:border-deep-purple"
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Number of Rounds
+              </label>
+              <div className="flex gap-2">
+                {[1, 3, 5].map((rounds) => (
+                  <button
+                    key={rounds}
+                    type="button"
+                    onClick={() => setTotalRounds(rounds as 1 | 3 | 5)}
+                    className={`flex-1 py-2 border ${
+                      totalRounds === rounds
+                        ? 'bg-deep-purple text-white border-deep-purple'
+                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                    } rounded-md transition-colors`}
+                  >
+                    {rounds} {rounds === 1 ? 'Round' : 'Rounds'}
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <Button
+                variant="success"
+                type="submit"
+                className="w-full"
+                disabled={creating || !tokenRefreshed}
               >
-                <option value={1}>1 Round (Quick Game)</option>
-                <option value={3}>3 Rounds (Regular Game)</option>
-                <option value={5}>5 Rounds (Extended Game)</option>
-              </select>
-              <p className="text-xs text-gray-500">
-                The winner is determined by the lowest cumulative score across all rounds.
-              </p>
-            </div>
-            
-            <div className="mt-8 space-y-4">
-              <div className="bg-blue-50 p-4 rounded-md text-sm">
-                <h3 className="font-medium text-blue-800 mb-1">Game Summary</h3>
-                <ul className="text-blue-700 list-disc list-inside space-y-1">
-                  <li>Card memory game for 2-4 players</li>
-                  <li>Each player starts with 4 face-down cards</li>
-                  <li>Players can peek at their bottom 2 cards initially</li>
-                  <li>Goal: Get the lowest total score or discard all cards</li>
-                  <li>{totalRounds} round{totalRounds > 1 ? 's' : ''} with ₹{wagerAmount} wager per player</li>
-                </ul>
-              </div>
+                {creating ? <LoadingSpinner size="small" /> : 'Create Game'}
+              </Button>
               
-              <div className="flex justify-between">
-                <Button 
-                  variant="secondary"
-                  onClick={() => navigate('/choose-game')}
-                  disabled={creating}
-                >
-                  Cancel
-                </Button>
-                
-                <Button 
-                  variant="primary"
-                  type="submit"
-                  disabled={creating}
-                  className="min-w-[120px]"
-                >
-                  {creating ? <LoadingSpinner size="small" /> : 'Create Game'}
-                </Button>
-              </div>
+              <Button
+                variant="secondary"
+                type="button"
+                className="w-full"
+                onClick={() => navigate('/')}
+                disabled={creating}
+              >
+                Cancel
+              </Button>
+              
+              <Button
+                variant="outline"
+                type="button"
+                className="w-full mt-2"
+                onClick={() => setShowRules(true)}
+              >
+                How to Play
+              </Button>
             </div>
           </form>
         </Card>
+        
+        <div className="mt-6 bg-blue-50 p-4 rounded-md text-sm">
+          <h2 className="font-medium text-blue-800 mb-1">About Scambodia</h2>
+          <ul className="text-blue-700 list-disc list-inside space-y-1">
+            <li>Card memory game for 2-4 players</li>
+            <li>Each player starts with 4 face-down cards</li>
+            <li>Goal: Get the lowest total score or discard all cards</li>
+            <li>Special powers with face cards (J, Q, K)</li>
+            <li>Declare "Scambodia" when you think you have the lowest score</li>
+          </ul>
+        </div>
       </div>
+
+      <RulesModal
+        isOpen={showRules}
+        onClose={() => setShowRules(false)}
+        gameType="Scambodia"
+        rules={scambodiaRules}
+      />
     </PageLayout>
   );
 } 

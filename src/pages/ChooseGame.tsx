@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import PageLayout from "../components/common/PageLayout";
 import chessIcon from "../assets/Chess.png";
 import rangvaarIcon from "../assets/Rangvaar.png";
@@ -53,7 +53,7 @@ const gameCategories = [
         name: "Scambodia",
         icon: scambodiaIcon,
         path: "/create-scambodia-game",
-        description: "Spy, Swap and Peek.",
+        description: "A fast-paced card game of strategy and bluffing. Outwit your opponents to claim victory!",
         available: true,
       },
       {
@@ -68,6 +68,40 @@ const gameCategories = [
         icon: sequenceIcon,
         path: "/coming-soon",
         description: "Connect five in a row on the board.",
+        available: false,
+      },
+    ],
+  },
+  {
+    id: "video",
+    name: "Video Games",
+    games: [
+      {
+        name: "FIFA",
+        icon: fifaIcon,
+        path: "/coming-soon",
+        description: "Login on your PC or Console",
+        available: false,
+      },
+      {
+        name: "PubG",
+        icon: pubgIcon,
+        path: "/coming-soon",
+        description: "Be the last one standing in a Battle Royale",
+        available: false,
+      },
+      {
+        name: "Fortnite",
+        icon: fortniteIcon,
+        path: "/coming-soon",
+        description: "Build, Play and Battle",
+        available: false,
+      },
+      {
+        name: "Call Of Duty",
+        icon: codIcon,
+        path: "/coming-soon",
+        description: "India's game of the year",
         available: false,
       },
     ],
@@ -135,8 +169,35 @@ const gameCategories = [
     ],
   },
   {
-    id: "asian",
-    name: "Asian Card Games",
+    id: "board",
+    name: "Board Games",
+    games: [
+      {
+        name: "Catan",
+        icon: catanIcon,
+        path: "/coming-soon",
+        description: "Trade, Build, Settle : Most trending board game",
+        available: false,
+      },
+      {
+        name: "Monodeal",
+        icon: monodealIcon,
+        path: "/coming-soon",
+        description: "Make your fortune fast",
+        available: false,
+      },
+      {
+        name: "Chaupar",
+        icon: chauparIcon,
+        path: "/coming-soon",
+        description: "Game of dice from Mahabharata",
+        available: false,
+      },
+    ],
+  },
+  {
+    id: "chinese",
+    name: "Chinese Games",
     games: [
       {
         name: "Dou Dizhu",
@@ -169,67 +230,6 @@ const gameCategories = [
     ],
   },
   {
-    id: "board",
-    name: "Board Games",
-    games: [
-      {
-        name: "Catan",
-        icon: catanIcon,
-        path: "/coming-soon",
-        description: "Trade, Build, Settle : Most trending board game",
-        available: false,
-      },
-      {
-        name: "Monodeal",
-        icon: monodealIcon,
-        path: "/coming-soon",
-        description: "Make your fortune fast",
-        available: false,
-      },
-      {
-        name: "Chaupar",
-        icon: chauparIcon,
-        path: "/coming-soon",
-        description: "Game of dice from Mahabharata",
-        available: false,
-      },
-    ],
-  },
-  {
-    id: "video",
-    name: "Video Games",
-    games: [
-      {
-        name: "FIFA",
-        icon: fifaIcon,
-        path: "/coming-soon",
-        description: "Login on your PC or Console",
-        available: false,
-      },
-      {
-        name: "PubG",
-        icon: pubgIcon,
-        path: "/coming-soon",
-        description: "Be the last one standing in a Battle Royale",
-        available: false,
-      },
-      {
-        name: "Fortnite",
-        icon: fortniteIcon,
-        path: "/coming-soon",
-        description: "Build, Play and Battle",
-        available: false,
-      },
-      {
-        name: "Call Of Duty",
-        icon: codIcon,
-        path: "/coming-soon",
-        description: "India's game of the year",
-        available: false,
-      },
-    ],
-  },
-  {
     id: "other",
     name: "Other Games",
     games: [
@@ -253,42 +253,53 @@ const gameCategories = [
 
 export default function ChooseGame(): JSX.Element {
   const navigate = useNavigate();
-  const [activeCategory, setActiveCategory] = useState("skill");
+  const { categoryId } = useParams<{ categoryId?: string }>();
+  const [activeCategory, setActiveCategory] = useState(categoryId || "skill");
+
+  // Update active category when route param changes
+  useEffect(() => {
+    if (categoryId) {
+      setActiveCategory(categoryId);
+    }
+  }, [categoryId]);
 
   const handleGameSelect = (path: string, available: boolean) => {
-    if (available) {
-      navigate(path);
-    } else {
-      // Navigate to the ComingSoon page instead of showing an alert
-      navigate('/coming-soon');
-    }
+    navigate(path);
+  };
+
+  // Back button should now go to categories page
+  const handleBackClick = () => {
+    navigate('/categories');
   };
 
   return (
     <PageLayout>
       <div className="container mx-auto px-4 py-6 max-w-6xl">
         <div className="mb-8">
-          <h1 className="text-2xl md:text-3xl font-bold text-deep-purple mb-2">Choose a Game</h1>
+          <h1 className="text-2xl md:text-3xl font-bold text-deep-purple mb-2">
+            {gameCategories.find(cat => cat.id === activeCategory)?.name || "Choose a Game"}
+          </h1>
           <p className="text-muted-violet">Select a game to create a new game room or browse available matches</p>
         </div>
         
-        {/* Category Tabs - Horizontal Scrollable on Mobile */}
-        <div className="mb-6 overflow-x-auto pb-2">
-          <div className="flex space-x-2 md:space-x-4 min-w-max">
-            {gameCategories.map((category) => (
-              <button
-                key={category.id}
-                onClick={() => setActiveCategory(category.id)}
-                className={`px-3 py-2 rounded-lg text-sm md:text-base font-medium whitespace-nowrap transition-colors
-                  ${
+        {/* Category Tabs - Sticky Horizontal Scrollable on Mobile */}
+        <div className="sticky top-0 z-10 -mx-4 px-4 pt-3 pb-4 mb-6 bg-gradient-to-r from-deep-purple/10 to-soft-pink/10 shadow-lg">
+          <div className="overflow-x-auto">
+            <div className="flex space-x-3 md:space-x-4 min-w-max">
+              {gameCategories.map((category) => (
+                <button
+                  key={category.id}
+                  onClick={() => setActiveCategory(category.id)}
+                  className={`px-5 py-4 rounded-xl text-sm md:text-base font-extrabold whitespace-nowrap transition-all transform hover:scale-105 ${
                     activeCategory === category.id
-                      ? "bg-soft-pink text-white"
-                      : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                      ? "bg-soft-pink text-white shadow-lg shadow-soft-pink/30"
+                      : "bg-white text-gray-700 border-2 border-gray-200 hover:border-soft-pink/50"
                   }`}
-              >
-                {category.name}
-              </button>
-            ))}
+                >
+                  {category.name}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -341,7 +352,9 @@ export default function ChooseGame(): JSX.Element {
                       <div className="p-5">
                         <div className="flex items-center mb-2">
                           <h2 className="text-xl font-medium text-gray-700">{game.name}</h2>
-                          <span className="ml-2 px-2 py-0.5 bg-soft-pink text-white text-xs font-semibold rounded-full">Coming Soon</span>
+                          <span className="ml-2 px-2 py-0.5 bg-soft-pink text-white text-xs font-semibold rounded-full">
+                            {game.name === "Scambodia" ? "Coming Tomorrow" : "Coming Soon"}
+                          </span>
                         </div>
                         <p className="text-gray-500 text-sm leading-relaxed">{game.description}</p>
                       </div>
@@ -356,11 +369,11 @@ export default function ChooseGame(): JSX.Element {
         {/* Back Button */}
         <div className="mt-8 text-center">
           <button
-            onClick={() => navigate('/')}
-            className="bg-deep-purple/10 text-deep-purple py-2 px-6 rounded-md font-medium hover:bg-deep-purple/20 transition-colors"
+            onClick={handleBackClick}
+            className="bg-deep-purple/10 text-deep-purple py-3 px-6 rounded-md font-medium hover:bg-deep-purple/20 transition-colors"
           >
             <i className="fas fa-arrow-left mr-2"></i>
-            Back to Home
+            Back to Categories
           </button>
         </div>
       </div>

@@ -45,10 +45,10 @@ const GameOverDisplay: React.FC<GameOverDisplayProps> = ({ gameState }) => {
         {/* TODO: Add details about winnings/payouts once implemented */}
         
         <button
-          onClick={() => navigate('/choose-game')}
+          onClick={() => navigate('/')}
           className="w-full bg-emerald-600 text-white py-2 px-5 rounded-md font-medium hover:bg-emerald-700 transition-colors"
         >
-          Back to Games
+          Back to Home
         </button>
       </div>
     </div>

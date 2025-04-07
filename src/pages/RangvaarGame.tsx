@@ -48,10 +48,10 @@ export default function RangvaarGame(): JSX.Element {
         <div className="text-center p-8 bg-white shadow-lg rounded-lg">
           <p className="text-red-600 mb-4">{error || 'Failed to load game data.'}</p>
           <button 
-            onClick={() => navigate('/choose-game')} 
+            onClick={() => navigate('/')} 
             className="bg-emerald-600 text-white px-4 py-2 rounded hover:bg-emerald-700"
           >
-            Back to Games
+            Back to Home
           </button>
         </div>
       </div>

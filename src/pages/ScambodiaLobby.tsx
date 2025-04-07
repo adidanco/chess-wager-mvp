@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -22,6 +22,7 @@ export default function ScambodiaLobby(): JSX.Element {
   const [joining, setJoining] = useState<boolean>(false);
   const [starting, setStarting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [autoStartAttempted, setAutoStartAttempted] = useState<boolean>(false);
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -29,42 +30,6 @@ export default function ScambodiaLobby(): JSX.Element {
       navigate('/login');
     }
   }, [isAuthenticated, navigate, loading]);
-
-  // Listen to game state
-  useEffect(() => {
-    if (!gameId) {
-      setError('No game ID provided');
-      setLoading(false);
-      return;
-    }
-
-    logger.info('ScambodiaLobby', 'Setting up game listener', { gameId });
-    
-    const unsubscribe = onSnapshot(
-      doc(db, 'scambodiaGames', gameId),
-      (snapshot) => {
-        if (snapshot.exists()) {
-          const data = snapshot.data() as Omit<ScambodiaGameState, 'gameId'>;
-          setGameState({ ...data, gameId: snapshot.id });
-          
-          // Auto-navigate to game if it's started
-          if (data.status === 'Playing') {
-            navigate(`/game/scambodia/play/${gameId}`);
-          }
-        } else {
-          setError('Game not found');
-        }
-        setLoading(false);
-      },
-      (err) => {
-        logger.error('ScambodiaLobby', 'Error loading game', { gameId, error: err });
-        setError(`Error loading game: ${err.message}`);
-        setLoading(false);
-      }
-    );
-
-    return () => unsubscribe();
-  }, [gameId, navigate]);
 
   // Join game handler
   const handleJoinGame = async () => {
@@ -83,21 +48,112 @@ export default function ScambodiaLobby(): JSX.Element {
     }
   };
 
-  // Start game handler
-  const handleStartGame = async () => {
+  // Start game handler - wrapped in useCallback to maintain reference stability
+  const handleStartGame = useCallback(async () => {
     if (!gameId) return;
+    
+    logger.info('ScambodiaLobby', 'handleStartGame called', { 
+      gameId, 
+      userId: currentUser?.uid,
+      alreadyStarting: starting
+    });
+    
+    // Prevent multiple start attempts
+    if (starting) {
+      logger.warn('ScambodiaLobby', 'Start already in progress, ignoring call', { gameId });
+      return;
+    }
     
     setStarting(true);
     try {
+      logger.info('ScambodiaLobby', 'Calling startScambodiaGame service', { gameId });
       await startScambodiaGame(gameId);
+      logger.info('ScambodiaLobby', 'Game started successfully', { gameId });
       toast.success('Game started!');
+      
+      // Don't navigate here, let the game state listener handle navigation
     } catch (error) {
       const err = error as Error;
       logger.error('ScambodiaLobby', 'Failed to start game', { gameId, error: err });
       toast.error(`Failed to start game: ${err.message}`);
       setStarting(false); // Reset only on error, as success will navigate away
     }
-  };
+  }, [gameId, currentUser?.uid, starting]);
+
+  // Listen to game state
+  useEffect(() => {
+    if (!gameId) {
+      setError('No game ID provided');
+      setLoading(false);
+      return;
+    }
+
+    logger.info('ScambodiaLobby', 'Setting up game listener', { 
+      gameId,
+      currentUserId: currentUser?.uid
+    });
+    
+    const unsubscribe = onSnapshot(
+      doc(db, 'scambodiaGames', gameId),
+      (snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.data() as Omit<ScambodiaGameState, 'gameId'>;
+          
+          logger.debug('ScambodiaLobby', 'Game state updated', { 
+            gameId,
+            status: data.status,
+            playerCount: data.players.length,
+            currentUserId: currentUser?.uid,
+            hostId: data.players[0]?.userId
+          });
+          
+          setGameState({ ...data, gameId: snapshot.id });
+          
+          // Auto-navigate to game if it's started
+          if (data.status === 'Playing') {
+            logger.info('ScambodiaLobby', 'Game is now Playing, navigating to game', { gameId });
+            unsubscribe(); // Unsubscribe BEFORE navigating
+            navigate(`/game/scambodia/play/${gameId}`);
+            return;
+          }
+          
+          // Auto-start game if all 4 players have joined and user is host
+          const isHost = data.players[0]?.userId === currentUser?.uid;
+          const hasFullLobby = data.players.length === 4;
+          const inWaitingStatus = data.status === 'Waiting';
+          const shouldAutoStart = inWaitingStatus && hasFullLobby && isHost && !autoStartAttempted;
+          
+          logger.debug('ScambodiaLobby', 'Auto-start check', { 
+            gameId,
+            inWaitingStatus,
+            hasFullLobby,
+            isHost,
+            autoStartAttempted,
+            shouldAutoStart
+          });
+          
+          if (shouldAutoStart) {
+            logger.info('ScambodiaLobby', 'Auto-starting game with 4 players', { gameId });
+            setAutoStartAttempted(true); // Prevent multiple auto-start attempts
+            // Small delay to ensure all clients are updated
+            setTimeout(() => {
+              handleStartGame();
+            }, 1000);
+          }
+        } else {
+          setError('Game not found');
+        }
+        setLoading(false);
+      },
+      (err) => {
+        logger.error('ScambodiaLobby', 'Error loading game', { gameId, error: err });
+        setError(`Error loading game: ${err.message}`);
+        setLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [gameId, navigate, currentUser?.uid, handleStartGame, autoStartAttempted]);
 
   // Check if current user is the host
   const isHost = gameState?.players[0]?.userId === currentUser?.uid;
@@ -127,9 +183,9 @@ export default function ScambodiaLobby(): JSX.Element {
             <p className="mb-6">{error || 'Failed to load game data'}</p>
             <Button 
               variant="primary" 
-              onClick={() => navigate('/choose-game')}
+              onClick={() => navigate('/')}
             >
-              Back to Games
+              Back to Home
             </Button>
           </Card>
         </div>
@@ -146,9 +202,9 @@ export default function ScambodiaLobby(): JSX.Element {
             <p className="mb-6">This game has been cancelled.</p>
             <Button 
               variant="primary" 
-              onClick={() => navigate('/choose-game')}
+              onClick={() => navigate('/')}
             >
-              Back to Games
+              Back to Home
             </Button>
           </Card>
         </div>
@@ -169,6 +225,26 @@ export default function ScambodiaLobby(): JSX.Element {
         <Card variant="default" className="p-6 mb-6">
           <div className="mb-6">
             <h2 className="text-lg font-semibold mb-3 text-deep-purple">Game Details</h2>
+            
+            {/* MVP Notice */}
+            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm text-yellow-700 font-bold">
+                    MVP VERSION
+                  </p>
+                  <p className="text-sm text-yellow-700">
+                    Betting feature is still being implemented, but you can play the game without real wagers.
+                  </p>
+                </div>
+              </div>
+            </div>
+            
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div className="text-gray-600">Game ID:</div>
               <div className="font-medium">{gameId}</div>
@@ -239,7 +315,7 @@ export default function ScambodiaLobby(): JSX.Element {
             
             {canStartGame && (
               <Button 
-                variant="primary" 
+                variant="success" 
                 className="w-full"
                 onClick={handleStartGame}
                 disabled={starting}
@@ -249,12 +325,10 @@ export default function ScambodiaLobby(): JSX.Element {
             )}
             
             <Button 
-              variant="secondary" 
-              className="w-full"
-              onClick={() => navigate('/choose-game')}
-              disabled={joining || starting}
+              variant="primary" 
+              onClick={() => navigate('/')}
             >
-              Back to Games
+              Back to Home
             </Button>
           </div>
         </Card>

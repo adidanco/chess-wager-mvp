@@ -6,6 +6,8 @@ import { useAuth } from '../context/AuthContext';
 import { logger } from '../utils/logger';
 // Import the actual service function
 import { createRangvaarGame } from '../services/rangvaarService';
+import RulesModal from '../components/common/RulesModal';
+import { rangvaarRules } from '../data/gameRules';
 
 export default function CreateRangvaarGame(): JSX.Element {
   const navigate = useNavigate();
@@ -14,6 +16,7 @@ export default function CreateRangvaarGame(): JSX.Element {
   const [totalRounds, setTotalRounds] = useState<3 | 5>(3); // Default rounds
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
+  const [showRules, setShowRules] = useState<boolean>(false);
 
   useEffect(() => {
     // Validate wager against balance when balance or wager changes
@@ -62,7 +65,7 @@ export default function CreateRangvaarGame(): JSX.Element {
       // const fakeGameId = `rangvaar_${Date.now()}`;
       // logger.info('CreateRangvaarGame', '[MVP Placeholder] Simulated Rangvaar game creation', { gameId: fakeGameId });
       // toast.success('[MVP Placeholder] Game creation simulated! Redirecting...');
-      // navigate('/choose-game'); 
+      // navigate('/'); 
       // -------------------------------------
       
     } catch (err) {
@@ -138,7 +141,7 @@ export default function CreateRangvaarGame(): JSX.Element {
           <div className="mt-6 flex justify-between items-center pt-4 border-t border-gray-200">
             <button
               type="button" // Important: type="button" to prevent form submission
-              onClick={() => navigate('/choose-game')}
+              onClick={() => navigate('/')}
               className="bg-gray-200 text-gray-800 py-2 px-5 rounded-md hover:bg-gray-300 transition-colors disabled:opacity-50"
               disabled={isSubmitting}
             >
@@ -152,8 +155,23 @@ export default function CreateRangvaarGame(): JSX.Element {
               {isSubmitting ? 'Creating...' : 'Create Game'}
             </button>
           </div>
+          
+          <button
+            type="button"
+            onClick={() => setShowRules(true)}
+            className="w-full bg-emerald-50 text-emerald-700 py-2 px-5 rounded-md font-medium border border-emerald-200 hover:bg-emerald-100 transition-colors"
+          >
+            How to Play
+          </button>
         </form>
       </div>
+      
+      <RulesModal
+        isOpen={showRules}
+        onClose={() => setShowRules(false)}
+        gameType="Rangvaar"
+        rules={rangvaarRules}
+      />
     </PageLayout>
   );
 } 

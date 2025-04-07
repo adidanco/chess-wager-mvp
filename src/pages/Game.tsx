@@ -93,6 +93,7 @@ export default function Game(): JSX.Element {
                   onPieceDrop={handlePieceDrop}
                   orientation={myColor === "w" ? "white" : "black"}
                   isGameOver={isGameOver}
+                  gameStatus={gameData?.status}
                 />
               </div>
             </div>

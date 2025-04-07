@@ -34,6 +34,18 @@ service cloud.firestore {
       allow update: if request.auth != null; 
     }
 
+    // Scambodia Games Collection
+    match /scambodiaGames/{gameId} {
+      // Allow reading any game if authenticated
+      allow read: if request.auth != null;
+      
+      // Allow creating games if authenticated
+      allow create: if request.auth != null;
+      
+      // Allow updating game state if authenticated (Needed for phase changes, card plays, etc.)
+      allow update: if request.auth != null; 
+    }
+
     // Transactions Collection (Example - adjust as needed)
     // Usually more restrictive - e.g., only create own transactions
     match /transactions/{transactionId} {

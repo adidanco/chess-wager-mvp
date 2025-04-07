@@ -40,6 +40,7 @@ import RangvaarGame from "./pages/RangvaarGame"
 import ScambodiaLobby from "./pages/ScambodiaLobby"
 import ScambodiaGame from "./pages/ScambodiaGame"
 import DesignSystem from "./pages/DesignSystem"
+import GameCategories from "./pages/GameCategories"
 
 // Wrap Firestore operations with network check
 const withNetworkCheck = async <T,>(operation: () => Promise<T>): Promise<T> => {
@@ -131,7 +132,9 @@ const AppContent = () => {
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<SignUp />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/categories" element={<GameCategories />} />
           <Route path="/choose-game" element={<ChooseGame />} />
+          <Route path="/choose-game/:categoryId" element={<ChooseGame />} />
           <Route path="/game/:gameId" element={<Game />} />
           <Route path="/create-game" element={<CreateGame />} />
           <Route path="/create-rangvaar-game" element={<CreateRangvaarGame />} />

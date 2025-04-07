@@ -1,27 +1,29 @@
 import React from 'react';
-import { CardPosition } from '../../types/scambodia';
 import Button from '../common/Button';
-import LoadingSpinner from '../common/LoadingSpinner';
+import { CardPosition, RoundPhase } from '../../types/scambodia';
 
 interface GameControlsProps {
   isMyTurn: boolean;
   currentPhase: string;
   selectedCardPosition: CardPosition | null;
   hasDrawnCard: boolean;
-  drawnFromDiscard: boolean; // Whether current drawn card is from discard pile
-  isSubmittingAction: boolean;
+  drawnFromDiscard: boolean;
+  isSubmitting: boolean;
   onDrawFromDeck: () => void;
   onDrawFromDiscard: () => void;
-  onExchangeCard: (position: CardPosition) => void;
+  onExchangeCard: () => void;
   onDiscardDrawnCard: () => void;
-  onAttemptMatch: (position: CardPosition) => void;
+  onAttemptMatch: () => void;
   onDeclareScambodia: () => void;
-  onUseSpecialPower: () => void;
+  onInitialPeek?: () => void;
   canDeclareScambodia: boolean;
+  disabled: boolean;
+  isInitialPeekPhase?: boolean;
 }
 
 /**
- * Component that provides action buttons based on the current game phase and selected card.
+ * Game controls for player actions.
+ * Shows different controls based on game state and current player's turn.
  */
 const GameControls: React.FC<GameControlsProps> = ({
   isMyTurn,
@@ -29,159 +31,131 @@ const GameControls: React.FC<GameControlsProps> = ({
   selectedCardPosition,
   hasDrawnCard,
   drawnFromDiscard,
-  isSubmittingAction,
+  isSubmitting,
   onDrawFromDeck,
   onDrawFromDiscard,
   onExchangeCard,
   onDiscardDrawnCard,
   onAttemptMatch,
   onDeclareScambodia,
-  onUseSpecialPower,
-  canDeclareScambodia
+  onInitialPeek,
+  canDeclareScambodia,
+  disabled,
+  isInitialPeekPhase
 }) => {
+  // Setup phase (not yet playing)
+  if (currentPhase === 'Setup') {
+    return (
+      <div className="flex justify-center space-x-2">
+        {onInitialPeek && !isInitialPeekPhase && (
+          <button
+            onClick={onInitialPeek}
+            disabled={isSubmitting}
+            className="bg-deep-purple hover:bg-soft-pink text-white px-4 py-2 rounded-lg shadow transition-colors disabled:opacity-50"
+          >
+            Peek at Bottom Cards
+          </button>
+        )}
+        {isInitialPeekPhase && (
+          <div className="bg-green-100 text-green-800 px-4 py-2 rounded-lg">
+            Peeking at bottom cards... {isInitialPeekPhase ? 'Wait for all players to peek' : 'Waiting for game to start'}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Don't show controls if not player's turn or not in playing phase
   if (!isMyTurn) {
     return (
-      <div className="text-center p-3 bg-gray-50 rounded-lg">
-        <p className="text-gray-600 italic">Waiting for other player's turn...</p>
-      </div>
-    );
-  }
-
-  if (isSubmittingAction) {
-    return (
-      <div className="text-center p-3 bg-gray-50 rounded-lg">
-        <div className="flex justify-center items-center">
-          <LoadingSpinner size="small" />
-          <span className="ml-2 text-gray-600">Processing action...</span>
+      <div className="flex justify-center">
+        <div className="px-4 py-2 bg-gray-100 text-gray-500 rounded-lg">
+          Waiting for opponent's turn
         </div>
       </div>
     );
   }
 
-  // Initial draw phase
+  // Show draw/declare actions if it IS the playing phase and card NOT drawn yet
   if (currentPhase === 'Playing' && !hasDrawnCard) {
     return (
-      <div className="p-3 bg-white rounded-lg shadow-sm">
-        <h3 className="text-deep-purple font-semibold mb-2 text-center">Your Action</h3>
-        <div className="flex flex-col sm:flex-row gap-2 justify-center">
-          <Button
-            variant="primary"
-            onClick={onDrawFromDeck}
-            disabled={isSubmittingAction}
+      <div className="flex flex-wrap justify-center items-center gap-3">
+        <Button 
+          variant="primary" 
+          onClick={onDrawFromDeck} 
+          disabled={disabled || isSubmitting}
+          loading={isSubmitting}
+          className="flex-grow sm:flex-grow-0"
+        >
+          Draw from Deck
+        </Button>
+        <Button 
+          variant="secondary"
+          onClick={onDrawFromDiscard} 
+          disabled={disabled || isSubmitting}
+          loading={isSubmitting}
+          className="flex-grow sm:flex-grow-0"
+        >
+          Draw from Discard
+        </Button>
+        {canDeclareScambodia && (
+          <Button 
+            variant="warning" 
+            onClick={onDeclareScambodia} 
+            disabled={disabled || isSubmitting}
+            loading={isSubmitting}
+            className="flex-grow sm:flex-grow-0"
           >
-            Draw from Deck
+            Declare Scambodia
           </Button>
-          <Button
-            variant="secondary"
-            onClick={onDrawFromDiscard}
-            disabled={isSubmittingAction}
-          >
-            Draw from Discard
-          </Button>
-          {canDeclareScambodia && (
-            <Button
-              variant="primary"
-              onClick={onDeclareScambodia}
-              disabled={isSubmittingAction}
-            >
-              Declare Scambodia
-            </Button>
-          )}
-        </div>
+        )}
       </div>
     );
   }
 
-  // After drawing a card - Exchange or Discard
-  if (currentPhase === 'Playing' && hasDrawnCard && selectedCardPosition === null) {
+  // Show post-draw actions if card HAS been drawn (Playing or FinalTurn phase)
+  if (hasDrawnCard) {
     return (
-      <div className="p-3 bg-white rounded-lg shadow-sm">
-        <h3 className="text-deep-purple font-semibold mb-2 text-center">
-          {drawnFromDiscard ? 'Select a card to exchange with' : 'Select an action'}
-        </h3>
-        <div className="flex flex-col sm:flex-row gap-2 justify-center">
-          {!drawnFromDiscard && (
-            <Button
-              variant="secondary"
-              onClick={onDiscardDrawnCard}
-              disabled={isSubmittingAction}
-            >
-              Discard Drawn Card
-            </Button>
-          )}
-          <p className="text-sm text-gray-600 mt-2 text-center">
-            {drawnFromDiscard 
-              ? 'Click on one of your face-down cards to exchange with the drawn card' 
-              : 'Select a face-down card to exchange, or discard the drawn card'}
-          </p>
-        </div>
+      <div className="flex flex-wrap justify-center items-center gap-3">
+        <Button 
+          variant="primary" 
+          onClick={onExchangeCard} 
+          // Disable if no card is selected in hand
+          disabled={selectedCardPosition === null || disabled || isSubmitting}
+          loading={isSubmitting}
+          className="flex-grow sm:flex-grow-0"
+        >
+          Exchange Card {selectedCardPosition !== null ? `(#${selectedCardPosition + 1})` : ''}
+        </Button>
+        <Button 
+          variant="secondary" 
+          onClick={onDiscardDrawnCard} 
+          // Can always discard the drawn card
+          disabled={disabled || isSubmitting}
+          loading={isSubmitting}
+          className="flex-grow sm:flex-grow-0"
+        >
+          Discard Drawn
+        </Button>
+        <Button 
+          variant="secondary" 
+          onClick={onAttemptMatch} 
+          // Disable if no card selected, or if drawn from discard (match only vs deck draw? Check rules)
+          disabled={selectedCardPosition === null || disabled || isSubmitting || drawnFromDiscard} 
+          loading={isSubmitting}
+          className="flex-grow sm:flex-grow-0"
+        >
+          Attempt Match {selectedCardPosition !== null ? `(#${selectedCardPosition + 1})` : ''}
+        </Button>
       </div>
     );
   }
 
-  // Card selected for action
-  if (currentPhase === 'Playing' && hasDrawnCard && selectedCardPosition !== null) {
-    return (
-      <div className="p-3 bg-white rounded-lg shadow-sm">
-        <h3 className="text-deep-purple font-semibold mb-2 text-center">Confirm Action</h3>
-        <div className="flex flex-col sm:flex-row gap-2 justify-center">
-          <Button
-            variant="primary"
-            onClick={() => onExchangeCard(selectedCardPosition)}
-            disabled={isSubmittingAction}
-          >
-            Exchange with Card {selectedCardPosition + 1}
-          </Button>
-          <Button
-            variant="secondary"
-            onClick={() => onAttemptMatch(selectedCardPosition)}
-            disabled={isSubmittingAction || drawnFromDiscard}
-          >
-            Try to Match Card {selectedCardPosition + 1}
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  // Special powers
-  if (currentPhase === 'SpecialPower') {
-    return (
-      <div className="p-3 bg-white rounded-lg shadow-sm">
-        <h3 className="text-deep-purple font-semibold mb-2 text-center">Special Power</h3>
-        <div className="text-center mb-2">
-          <p className="text-sm text-gray-600">You discarded a special card! Would you like to use its power?</p>
-        </div>
-        <div className="flex flex-col sm:flex-row gap-2 justify-center">
-          <Button
-            variant="primary"
-            onClick={onUseSpecialPower}
-            disabled={isSubmittingAction}
-          >
-            Use Power
-          </Button>
-          <Button
-            variant="secondary"
-            onClick={onDiscardDrawnCard}
-            disabled={isSubmittingAction}
-          >
-            Skip
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  // Other phases (Scoring, FinalTurn, etc.)
+  // Fallback for unexpected states
   return (
-    <div className="text-center p-3 bg-gray-50 rounded-lg">
-      <p className="text-gray-600 italic">
-        {currentPhase === 'Setup' && 'Game is being set up...'}
-        {currentPhase === 'FinalTurn' && 'Final turns after Scambodia was declared...'}
-        {currentPhase === 'Scoring' && 'Calculating scores...'}
-        {currentPhase === 'Complete' && 'Round complete. Preparing next round...'}
-      </p>
-    </div>
+     <div className="text-center p-3">
+        <p className="text-gray-500 italic">Waiting for action...</p>
+      </div>
   );
 };
 

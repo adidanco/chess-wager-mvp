@@ -47,6 +47,25 @@ interface WithdrawalProcessData {
   adminNotes: string;
 }
 
+// Define interfaces for Scambodia functions
+interface ScambodiaPayoutData {
+  gameId: string;
+}
+
+interface ScambodiaGameData {
+  gameId: string;
+}
+
+interface ScambodiaTransitionData {
+  gameId: string;
+  currentRoundNumber: number;
+}
+
+interface MobileLoginData {
+  mobileNumber: string;
+  otpVerified: boolean;
+}
+
 /**
  * Function to confirm a deposit after a user has made a UPI payment
  * In a real production app, this would be triggered by a webhook from payment gateway
@@ -715,3 +734,496 @@ export const processWithdrawal = functions.https.onCall((data, context) => {
     );
   });
 });
+
+/**
+ * Process payout for a completed Scambodia game
+ */
+export const processScambodiaPayout = functions.https.onCall(async (data, context) => {
+  // Check authentication
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+  }
+
+  const { gameId } = data as ScambodiaPayoutData;
+  if (!gameId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Game ID is required');
+  }
+
+  try {
+    const gameRef = db.collection('scambodiaGames').doc(gameId);
+    
+    // Perform transaction to ensure atomic update
+    return await db.runTransaction(async (transaction) => {
+      const gameDoc = await transaction.get(gameRef);
+      
+      if (!gameDoc.exists) {
+        throw new functions.https.HttpsError('not-found', 'Game not found');
+      }
+      
+      const gameData = gameDoc.data();
+      if (!gameData) {
+        throw new functions.https.HttpsError('internal', 'Game data is empty');
+      }
+      
+      // Check if game is finished
+      if (gameData.status !== 'Finished') {
+        throw new functions.https.HttpsError('failed-precondition', 'Game must be in Finished state');
+      }
+      
+      // Check if payout already processed
+      if (gameData.payoutProcessed) {
+        throw new functions.https.HttpsError('already-exists', 'Payout already processed');
+      }
+      
+      const winnerId = gameData.gameWinnerId;
+      if (!winnerId) {
+        throw new functions.https.HttpsError('failed-precondition', 'Game has no winner');
+      }
+      
+      // Calculate total pot
+      const wagerPerPlayer = gameData.wagerPerPlayer || 0;
+      const playerCount = gameData.players?.length || 0;
+      const totalPot = wagerPerPlayer * playerCount;
+      
+      // Get winner user doc
+      const winnerRef = db.collection('users').doc(winnerId);
+      const winnerDoc = await transaction.get(winnerRef);
+      
+      if (!winnerDoc.exists) {
+        throw new functions.https.HttpsError('not-found', 'Winner user account not found');
+      }
+      
+      // Update winner's balance
+      transaction.update(winnerRef, {
+        balance: admin.firestore.FieldValue.increment(totalPot),
+        'stats.wins': admin.firestore.FieldValue.increment(1),
+        'stats.earnings': admin.firestore.FieldValue.increment(totalPot),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+      
+      // Mark game as paid out
+      transaction.update(gameRef, {
+        payoutProcessed: true,
+        payoutTimestamp: admin.firestore.FieldValue.serverTimestamp(),
+        payoutAmount: totalPot,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+      
+      // Record transaction in game history
+      const transactionRef = db.collection('transactions').doc();
+      transaction.set(transactionRef, {
+        type: 'payout',
+        gameId,
+        gameType: 'Scambodia',
+        userId: winnerId,
+        amount: totalPot,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        description: `Scambodia game payout for winner. Game ID: ${gameId}`
+      });
+      
+      functions.logger.info('Scambodia payout processed', {
+        gameId,
+        winnerId,
+        amount: totalPot
+      });
+      
+      return { success: true, amount: totalPot };
+    });
+  } catch (error) {
+    functions.logger.error('Error processing Scambodia payout', { error, gameId });
+    throw new functions.https.HttpsError('internal', 'Failed to process payout');
+  }
+});
+
+/**
+ * Transition to the next round in a Scambodia game or mark as finished if all rounds complete
+ */
+export const transitionScambodiaRound = functions.https.onCall(async (data, context) => {
+  // Check authentication
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+  }
+
+  const { gameId, currentRoundNumber } = data as ScambodiaTransitionData;
+  if (!gameId || currentRoundNumber === undefined) {
+    throw new functions.https.HttpsError('invalid-argument', 'Game ID and current round number are required');
+  }
+
+  try {
+    const gameRef = db.collection('scambodiaGames').doc(gameId);
+    
+    // Perform transaction to ensure atomic update
+    return await db.runTransaction(async (transaction) => {
+      const gameDoc = await transaction.get(gameRef);
+      
+      if (!gameDoc.exists) {
+        throw new functions.https.HttpsError('not-found', 'Game not found');
+      }
+      
+      const gameData = gameDoc.data();
+      if (!gameData) {
+        throw new functions.https.HttpsError('internal', 'Game data is empty');
+      }
+      
+      // Check if game is in playing state
+      if (gameData.status !== 'Playing') {
+        throw new functions.https.HttpsError('failed-precondition', 'Game must be in Playing state');
+      }
+      
+      // Verify current round
+      if (gameData.currentRoundNumber !== currentRoundNumber) {
+        throw new functions.https.HttpsError('failed-precondition', 'Current round mismatch');
+      }
+      
+      const currentRound = gameData.rounds[currentRoundNumber];
+      if (!currentRound || currentRound.phase !== 'Scoring') {
+        throw new functions.https.HttpsError('failed-precondition', 'Round must be in Scoring phase');
+      }
+      
+      // Check if this is the final round
+      const isLastRound = currentRoundNumber >= gameData.totalRounds;
+      
+      if (isLastRound) {
+        // Game is complete, determine overall winner
+        let lowestScore = Number.MAX_SAFE_INTEGER;
+        let gameWinnerId = null;
+        let tiebreaker = 0;
+        
+        // Calculate final scores and find winner
+        Object.entries(gameData.cumulativeScores).forEach(([playerId, score]) => {
+          const playerScambodiaCalls = gameData.scambodiaCalls?.[playerId] || 0;
+          
+          if (score < lowestScore) {
+            lowestScore = score;
+            gameWinnerId = playerId;
+            tiebreaker = playerScambodiaCalls;
+          } else if (score === lowestScore) {
+            // Tie-breaker: more successful Scambodia calls wins
+            const currentTiebreaker = playerScambodiaCalls;
+            if (currentTiebreaker > tiebreaker) {
+              gameWinnerId = playerId;
+              tiebreaker = currentTiebreaker;
+            }
+          }
+        });
+        
+        // Mark game as finished
+        transaction.update(gameRef, {
+          status: 'Finished',
+          gameWinnerId,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+        
+        functions.logger.info('Scambodia game finished', {
+          gameId,
+          winnerId: gameWinnerId,
+          totalRounds: gameData.totalRounds
+        });
+      } else {
+        // Initialize next round
+        const nextRoundNumber = currentRoundNumber + 1;
+        
+        // Create initial state for next round
+        // This is simplified - in a real implementation you'd have dealer logic, etc.
+        const newRound = {
+          roundNumber: nextRoundNumber,
+          phase: 'Setup',
+          currentTurnPlayerId: gameData.players[0].userId, // First player starts
+          playerCards: {}, // Will be populated with initial cards
+          visibleToPlayer: {}, // Will track which cards players can see
+          discardPile: [],
+          drawPile: [],
+          actions: [],
+          scores: {},
+          cardPowersUsed: []
+        };
+        
+        // Mark round as complete and set up next round
+        transaction.update(gameRef, {
+          [`rounds.${currentRoundNumber}.phase`]: 'Complete',
+          [`rounds.${nextRoundNumber}`]: newRound,
+          currentRoundNumber: nextRoundNumber,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+        
+        functions.logger.info('Scambodia transitioning to next round', {
+          gameId,
+          fromRound: currentRoundNumber,
+          toRound: nextRoundNumber
+        });
+      }
+      
+      return { success: true, isLastRound };
+    });
+  } catch (error) {
+    functions.logger.error('Error transitioning Scambodia round', { error, gameId });
+    throw new functions.https.HttpsError('internal', 'Failed to transition round');
+  }
+});
+
+/**
+ * Find a user by mobile number (for OTP login)
+ * Note: In a production app, this would use a secure SMS verification service
+ */
+export const findUserByMobileNumber = functions.https.onCall(async (data, context) => {
+  const { mobileNumber, otpVerified } = data as MobileLoginData;
+  
+  if (!mobileNumber) {
+    throw new functions.https.HttpsError('invalid-argument', 'Mobile number is required');
+  }
+  
+  if (!otpVerified) {
+    throw new functions.https.HttpsError('failed-precondition', 'OTP must be verified');
+  }
+  
+  try {
+    // In a real implementation, we would query users by verified mobile number
+    // For this MVP version, let's just get any user for demo purposes
+    const usersSnapshot = await db.collection('users').limit(1).get();
+    
+    if (usersSnapshot.empty) {
+      throw new functions.https.HttpsError('not-found', 'No user accounts found');
+    }
+    
+    const userDoc = usersSnapshot.docs[0];
+    const userData = userDoc.data();
+    
+    functions.logger.info('User found by mobile number (demo)', {
+      mobileNumber,
+      userId: userDoc.id
+    });
+    
+    // Return user info needed for authentication
+    return {
+      userId: userDoc.id,
+      userEmail: userData.email || `demo-${userDoc.id.substring(0, 6)}@example.com`
+    };
+  } catch (error) {
+    functions.logger.error('Error finding user by mobile', { error, mobileNumber });
+    throw new functions.https.HttpsError('internal', 'Failed to find user');
+  }
+});
+
+/**
+ * Cloud function to start a Scambodia game
+ * This handles operations that require admin privileges:
+ * - Checking player balances
+ * - Deducting wagers from players
+ * - Creating transaction records
+ * - Initializing the first round
+ */
+export const startScambodiaGame = functions.https.onCall(async (data, context) => {
+  // Check authentication
+  if (!context?.auth) {
+    throw new functions.https.HttpsError(
+      "unauthenticated",
+      "User must be authenticated to start a game"
+    );
+  }
+
+  const { gameId } = data as ScambodiaGameData;
+  
+  if (!gameId) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "Game ID is required"
+    );
+  }
+
+  try {
+    const gameDocRef = db.collection("scambodiaGames").doc(gameId);
+    
+    // Use a transaction to ensure data consistency
+    return await db.runTransaction(async (transaction) => {
+      // Step 1: Read all necessary data
+      const gameDoc = await transaction.get(gameDocRef);
+      
+      if (!gameDoc.exists) {
+        throw new functions.https.HttpsError("not-found", "Game not found");
+      }
+      
+      const gameState = gameDoc.data();
+      
+      if (gameState.status !== "Waiting") {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "Game has already started or been cancelled"
+        );
+      }
+      
+      if (gameState.players.length < 2) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "Game needs at least 2 players to start"
+        );
+      }
+
+      // Get user documents for all players
+      const playerDocs = await Promise.all(
+        gameState.players.map(async (player) => {
+          const userDocRef = db.collection("users").doc(player.userId);
+          const userDoc = await transaction.get(userDocRef);
+          
+          if (!userDoc.exists) {
+            throw new functions.https.HttpsError(
+              "not-found",
+              `Player ${player.username} account not found`
+            );
+          }
+          
+          return {
+            ref: userDocRef,
+            player,
+            data: userDoc.data()
+          };
+        })
+      );
+      
+      // Step 2: Validate player balances
+      const wagerAmount = gameState.wagerPerPlayer;
+      
+      playerDocs.forEach(({ player, data }) => {
+        const balance = data.balance || 0;
+        
+        if (balance < wagerAmount) {
+          throw new functions.https.HttpsError(
+            "failed-precondition",
+            `Player ${player.username} has insufficient balance to play`
+          );
+        }
+      });
+      
+      // Step 3: Initialize game state
+      // Create and shuffle deck
+      const deck = createShuffledDeck();
+      
+      // Set up player cards and visibility
+      const playerCards = {};
+      const visibleToPlayer = {};
+      
+      gameState.players.forEach(player => {
+        playerCards[player.userId] = [];
+        visibleToPlayer[player.userId] = [2, 3]; // Bottom two cards initially visible
+      });
+      
+      // Deal 4 cards to each player
+      for (let i = 0; i < 4; i++) {
+        for (const player of gameState.players) {
+          if (deck.length > 0) {
+            const card = deck.pop();
+            playerCards[player.userId].push(card);
+          }
+        }
+      }
+      
+      // Setup discard and draw piles
+      const firstDiscard = deck.pop();
+      const discardPile = [firstDiscard];
+      const drawPile = deck;
+      
+      // Create round state
+      const firstRound = {
+        roundNumber: 1,
+        phase: "Setup",
+        currentTurnPlayerId: gameState.players[0].userId,
+        playerCards,
+        visibleToPlayer,
+        discardPile,
+        drawPile,
+        drawnCard: null,
+        drawnCardUserId: null,
+        actions: [],
+        scores: {},
+        cardPowersUsed: []
+      };
+      
+      // Step 4: Perform all writes
+      
+      // Update player balances and create transaction records
+      playerDocs.forEach(({ ref, player }) => {
+        // Deduct wager from player balance
+        transaction.update(ref, {
+          balance: admin.firestore.FieldValue.increment(-wagerAmount),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+        
+        // Create transaction record
+        const transactionRef = db.collection("transactions").doc();
+        transaction.set(transactionRef, {
+          userId: player.userId,
+          gameId,
+          gameType: "Scambodia",
+          type: "wager",
+          amount: -wagerAmount,
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          description: `Scambodia game wager. Game ID: ${gameId}`
+        });
+      });
+      
+      // Update game state
+      transaction.update(gameDocRef, {
+        status: "Playing",
+        currentRoundNumber: 1,
+        rounds: { 1: firstRound },
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+      
+      functions.logger.info(`Scambodia game started: ${gameId}`, {
+        playerCount: gameState.players.length,
+        wagerAmount
+      });
+      
+      return { success: true, message: "Game started successfully" };
+    });
+  } catch (error) {
+    functions.logger.error(`Error starting Scambodia game: ${gameId}`, error);
+    throw new functions.https.HttpsError(
+      "internal",
+      `Failed to start game: ${error.message}`
+    );
+  }
+});
+
+// Helper function to create and shuffle a deck of cards
+function createShuffledDeck() {
+  const suits = ["Hearts", "Diamonds", "Clubs", "Spades"];
+  const ranks = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
+  const deck = [];
+
+  // Create deck
+  for (const suit of suits) {
+    for (const rank of ranks) {
+      // Calculate value based on card rules
+      let value = 0;
+      
+      if (rank === "1") {
+        value = 1;
+      } else if (rank === "J") {
+        value = 11;
+      } else if (rank === "Q") {
+        value = 12;
+      } else if (rank === "K") {
+        // Kings of Hearts and Diamonds are worth 0, others are 13
+        value = (suit === "Hearts" || suit === "Diamonds") ? 0 : 13;
+      } else {
+        // Number cards 2-10
+        value = parseInt(rank);
+      }
+
+      deck.push({
+        suit,
+        rank,
+        id: `${suit[0]}${rank}`, // e.g., "H7", "SA"
+        value
+      });
+    }
+  }
+
+  // Shuffle the deck (Fisher-Yates algorithm)
+  for (let i = deck.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [deck[i], deck[j]] = [deck[j], deck[i]];
+  }
+  
+  return deck;
+}

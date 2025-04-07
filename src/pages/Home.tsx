@@ -107,7 +107,7 @@ export default function Home(): JSX.Element {
 
   // Handlers for GameActions component
   const handleChooseGame = (): void => {
-    navigate("/choose-game")
+    navigate("/categories");
   }
 
   const handleJoinGame = (): void => {

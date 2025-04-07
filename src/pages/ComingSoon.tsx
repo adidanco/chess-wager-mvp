@@ -22,10 +22,10 @@ export default function ComingSoon(): JSX.Element {
           
           <div className="flex flex-col space-y-4">
             <button
-              onClick={() => navigate('/choose-game')}
+              onClick={() => navigate('/')}
               className="bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition-colors"
             >
-              Back to Games
+              Back to Home
             </button>
             <button
               onClick={() => navigate('/')}

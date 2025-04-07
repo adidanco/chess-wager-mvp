@@ -5,6 +5,9 @@ interface GameStatusProps {
   gameState: ScambodiaGameState;
   currentUserId: string;
   isMyTurn: boolean;
+  isInitialPeekPhase?: boolean;
+  peekCountdown?: number;
+  currentPhase?: string;
 }
 
 /**
@@ -17,7 +20,10 @@ interface GameStatusProps {
 const GameStatus: React.FC<GameStatusProps> = ({
   gameState,
   currentUserId,
-  isMyTurn
+  isMyTurn,
+  isInitialPeekPhase,
+  peekCountdown,
+  currentPhase
 }) => {
   const currentRound = gameState.rounds[gameState.currentRoundNumber];
   if (!currentRound) return null;
@@ -52,7 +58,12 @@ const GameStatus: React.FC<GameStatusProps> = ({
         </div>
         
         <div className="flex items-center">
-          {isMyTurn ? (
+          {isInitialPeekPhase ? (
+            <div className="flex items-center bg-green-100 text-green-800 px-3 py-1 rounded-full font-medium animate-pulse">
+              <span className="h-2 w-2 bg-green-500 rounded-full mr-2"></span>
+              Peek Phase ({peekCountdown}s)
+            </div>
+          ) : isMyTurn ? (
             <div className="flex items-center bg-green-100 text-green-800 px-3 py-1 rounded-full font-medium animate-pulse">
               <span className="h-2 w-2 bg-green-500 rounded-full mr-2"></span>
               Your Turn
@@ -64,6 +75,14 @@ const GameStatus: React.FC<GameStatusProps> = ({
           )}
         </div>
       </div>
+
+      {/* Initial peek phase message */}
+      {isInitialPeekPhase && (
+        <div className="mt-3 mb-2 bg-soft-pink/20 py-2 px-4 rounded-lg text-center">
+          <p className="text-deep-purple font-medium text-md uppercase">INITIAL PEEK GOING ON</p>
+          <p className="text-sm text-gray-600">WAITING FOR ALL PLAYERS TO PEEK</p>
+        </div>
+      )}
 
       {/* Additional game info */}
       <div className="mt-2 text-sm text-gray-600">

@@ -48,22 +48,26 @@ export type RoundPhase =
 
 // Player Action Types
 export type PlayerActionType =
-  | 'DrawDeck' // Draw from the deck
-  | 'DrawDiscard' // Draw from the discard pile
-  | 'Exchange' // Exchange drawn card with a face-down card
-  | 'Discard' // Discard drawn card without exchanging
-  | 'Match' // Attempt to match and discard a face-down card
-  | 'DeclareScambodia' // Declare "Scambodia" - lowest score claim
-  | 'UsePower'; // Use a special card power
+  | 'DrawDeck'
+  | 'DrawDiscard'
+  | 'Exchange'
+  | 'Discard'
+  | 'Match'
+  | 'DeclareScambodia'
+  | 'UsePower'
+  | 'EndTurn';
 
 export interface PlayerAction {
   type: PlayerActionType;
   playerId: string;
-  cardId?: string; // ID of the card involved
-  cardPosition?: CardPosition; // Position of the face-down card
-  powerUsed?: CardPowerAction; // Details of power used (if applicable)
+  cardId?: string;
+  cardPosition?: CardPosition;
+  success?: boolean;
   timestamp: Timestamp;
 }
+
+// Add export to the union type of all actions
+export type Action = PlayerAction | CardPowerAction;
 
 // Round specific state
 export interface RoundState {
@@ -71,14 +75,19 @@ export interface RoundState {
   phase: RoundPhase;
   currentTurnPlayerId?: string;
   playerCards: { [playerId: string]: (Card | null)[] }; // 2x2 grid, null means discarded
-  visibleToPlayer: { [playerId: string]: CardPosition[] }; // Which cards each player has seen
+  // Allow numbers (own card index) or strings ("opponentId:index") for opponent peek
+  visibleToPlayer: { [playerId: string]: (CardPosition | string)[] }; 
   discardPile: Card[];
   drawPile: Card[];
+  drawnCard: Card | null; // Card currently drawn by a player 
+  drawnCardUserId: string | null; // ID of player who drew the card
   playerDeclaredScambodia?: string; // Player who declared "Scambodia"
-  actions: PlayerAction[]; // Log of all actions in the round
+  actions: Action[]; // Use the union type Action
   scores: { [playerId: string]: number }; // Final scores for this round
   roundWinnerId?: string; // Player with lowest score (or who discarded all cards)
   cardPowersUsed: CardPowerAction[]; // Record of all special powers used
+  initialPeekCompleted?: boolean; // Add the new flag here (optional)
+  scambodiaCorrect?: boolean; // Add flag for correct Scambodia call
 }
 
 // Overall Game State
@@ -111,11 +120,12 @@ export interface UseScambodiaGameReturn {
   gameState: ScambodiaGameState | null;
   loading: boolean;
   error: string | null;
+  drawnCard: Card | null; // The currently drawn card (if any)
   // Player actions
-  drawCard: (source: 'deck' | 'discard') => Promise<void>;
+  drawCard: (source: 'deck' | 'discard') => Promise<Card | null>;
   exchangeCard: (cardPosition: CardPosition) => Promise<void>;
-  discardDrawnCard: () => Promise<void>;
-  attemptMatch: (cardPosition: CardPosition) => Promise<void>;
+  discardDrawnCard: () => Promise<Card | null>;
+  attemptMatch: (cardPosition: CardPosition) => Promise<boolean | null>;
   declareScambodia: () => Promise<void>;
   usePower: (powerType: CardPowerType, params: any) => Promise<void>;
   // Game flow

@@ -1,12 +1,14 @@
 import { initializeApp } from "firebase/app"
 import { getAuth, setPersistence, browserLocalPersistence } from "firebase/auth"
 import { getFirestore, enableIndexedDbPersistence, Firestore } from "firebase/firestore"
+import { getFunctions } from "firebase/functions"
 import { firebaseConfig } from "./firebaseConfig"
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig)
 const auth = getAuth(app)
 const db: Firestore = getFirestore(app)
+const functions = getFunctions(app)
 
 // Set up auth persistence
 setPersistence(auth, browserLocalPersistence).catch((error: Error) => {
@@ -24,4 +26,4 @@ enableIndexedDbPersistence(db).catch((err: { code: string }) => {
   }
 })
 
-export { auth, db } 
+export { auth, db, functions }

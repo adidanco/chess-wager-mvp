@@ -106,9 +106,9 @@ const GameOverDisplay: React.FC<GameOverDisplayProps> = ({
           <Button
             variant="primary"
             className="flex-1"
-            onClick={() => navigate('/choose-game')}
+            onClick={() => navigate('/')}
           >
-            Back to Games
+            Back to Home
           </Button>
           <Button
             variant="secondary"

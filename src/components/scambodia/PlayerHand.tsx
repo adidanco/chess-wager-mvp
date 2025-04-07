@@ -10,6 +10,7 @@ interface PlayerHandProps {
   onCardClick?: (position: CardPosition) => void;  // Card click handler
   canSelectCard: boolean;  // Whether player can select cards currently
   currentPhase: string;  // Current game phase
+  isTargeting?: boolean;  // Is player targeting their own hand for a power?
 }
 
 /**
@@ -23,7 +24,8 @@ const PlayerHand: React.FC<PlayerHandProps> = ({
   isMyTurn,
   onCardClick,
   canSelectCard,
-  currentPhase
+  currentPhase,
+  isTargeting
 }) => {
   const handleCardClick = (position: CardPosition) => {
     if (isMyTurn && canSelectCard && onCardClick) {

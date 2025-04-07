@@ -11,6 +11,7 @@ import { logger } from '../utils/logger';
 import { MAX_PLAYERS } from '../constants/rangvaarConstants';
 // Import the actual join function
 import { joinRangvaarGame, startGameAndInitializeRound } from '../services/rangvaarService';
+import { Button } from '@mui/material';
 
 // Helper to format Timestamp
 const formatTimestamp = (timestamp: Timestamp | undefined): string => {
@@ -34,7 +35,7 @@ export default function RangvaarLobby(): JSX.Element {
       setError('No game ID provided.');
       setLoading(false);
       toast.error('Invalid game link.');
-      navigate('/choose-game');
+      navigate('/');
       return;
     }
     
@@ -146,12 +147,12 @@ export default function RangvaarLobby(): JSX.Element {
       <PageLayout>
         <div className="text-center p-8">
           <p className="text-red-600 mb-4">{error}</p>
-          <button 
-            onClick={() => navigate('/choose-game')} 
+          <Button 
+            onClick={() => navigate('/')} 
             className="bg-emerald-600 text-white px-4 py-2 rounded hover:bg-emerald-700"
           >
-            Back to Games
-          </button>
+            Back to Home
+          </Button>
         </div>
       </PageLayout>
     );
@@ -224,7 +225,7 @@ export default function RangvaarLobby(): JSX.Element {
           {gameState.status !== 'Waiting' && gameState.status !== 'Starting' && (
               // Show leave button only if game hasn't started or user is viewing unexpectedly
               <button
-                  onClick={() => navigate('/choose-game')}
+                  onClick={() => navigate('/')}
                   className="w-full bg-gray-200 text-gray-800 py-2 px-5 rounded-md hover:bg-gray-300 transition-colors"
                 >
                   Leave Lobby
@@ -233,7 +234,7 @@ export default function RangvaarLobby(): JSX.Element {
           {/* Always show Leave Lobby if game is just waiting? */}
           {gameState.status === 'Waiting' && (
                 <button
-                    onClick={() => navigate('/choose-game')}
+                    onClick={() => navigate('/')}
                     className="w-full bg-gray-200 text-gray-800 py-2 px-5 rounded-md hover:bg-gray-300 transition-colors"
                   >
                     Leave Lobby

@@ -23,14 +23,17 @@ import PageLayout from "../components/common/PageLayout"
 import { GameData, UserProfile } from "chessTypes"
 import { GAME_STATUS, CURRENCY_SYMBOL } from "../utils/constants"
 import { RangvaarGameState } from "../types/rangvaar"
+import { ScambodiaGameState } from "../types/scambodia"
 import chessIcon from "../assets/Chess.png"
 import rangvaarIcon from "../assets/Rangvaar.png"
+import scambodiaIcon from "../assets/Scambodia.png"
 import { joinRangvaarGame } from "../services/rangvaarService"
+import { joinScambodiaGame } from "../services/scambodiaService"
 
 // Unified interface for displaying games in the list
 interface DisplayGameItem {
   id: string;
-  gameType: 'Chess' | 'Rangvaar'; // Differentiate game type
+  gameType: 'Chess' | 'Rangvaar' | 'Scambodia'; // Differentiate game type
   wager: number;
   creatorUsername?: string; // Optional: Fetch if needed
   createdAt?: any; // Firestore Timestamp
@@ -78,24 +81,40 @@ export default function JoinGame(): JSX.Element {
       where("status", "==", "Waiting") // Use string status for Rangvaar
     )
 
+    // Query for Scambodia games
+    const scambodiaQuery = query(
+      collection(db, "scambodiaGames"),
+      where("status", "==", "Waiting")
+    )
+
     logger.debug('JoinGame', 'Setting up game listeners', { userId: currentUser.uid })
 
     // Combine listeners
     const unsubChess = onSnapshot(chessQuery, 
-      (snapshot: QuerySnapshot<DocumentData>) => processSnapshots(snapshot, null), 
+      (snapshot: QuerySnapshot<DocumentData>) => processSnapshots(snapshot, null, null), 
       handleSnapshotError
     )
     
     const unsubRangvaar = onSnapshot(rangvaarQuery, 
-      (snapshot: QuerySnapshot<DocumentData>) => processSnapshots(null, snapshot),
+      (snapshot: QuerySnapshot<DocumentData>) => processSnapshots(null, snapshot, null),
+      handleSnapshotError
+    )
+
+    const unsubScambodia = onSnapshot(scambodiaQuery,
+      (snapshot: QuerySnapshot<DocumentData>) => processSnapshots(null, null, snapshot),
       handleSnapshotError
     )
 
     let chessGames: DisplayGameItem[] = []
     let rangvaarGames: DisplayGameItem[] = []
-    let initialLoadComplete = { chess: false, rangvaar: false }
+    let scambodiaGames: DisplayGameItem[] = []
+    let initialLoadComplete = { chess: false, rangvaar: false, scambodia: false }
 
-    const processSnapshots = (chessSnap: QuerySnapshot<DocumentData> | null, rangvaarSnap: QuerySnapshot<DocumentData> | null) => {
+    const processSnapshots = (
+      chessSnap: QuerySnapshot<DocumentData> | null, 
+      rangvaarSnap: QuerySnapshot<DocumentData> | null,
+      scambodiaSnap: QuerySnapshot<DocumentData> | null
+    ) => {
       if (chessSnap) {
         chessGames = chessSnap.docs
           .map(doc => ({
@@ -122,9 +141,22 @@ export default function JoinGame(): JSX.Element {
           .filter(game => game.creatorId !== currentUser?.uid) // Exclude user's own games
         initialLoadComplete.rangvaar = true
       }
+      if (scambodiaSnap) {
+        scambodiaGames = scambodiaSnap.docs
+          .map(doc => ({
+            id: doc.id,
+            gameType: 'Scambodia' as const,
+            wager: (doc.data() as ScambodiaGameState).wagerPerPlayer || 0,
+            createdAt: (doc.data() as ScambodiaGameState).createdAt,
+            creatorId: (doc.data() as ScambodiaGameState).players[0]?.userId, // First player is creator
+            icon: scambodiaIcon,
+          }))
+          .filter(game => game.creatorId !== currentUser?.uid) // Exclude user's own games
+        initialLoadComplete.scambodia = true
+      }
 
       // Combine and update state
-      const combinedGames = [...chessGames, ...rangvaarGames]
+      const combinedGames = [...chessGames, ...rangvaarGames, ...scambodiaGames]
       // Optional: Sort combined list, e.g., by creation time
       combinedGames.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0))
       
@@ -132,15 +164,15 @@ export default function JoinGame(): JSX.Element {
       logger.debug('JoinGame', 'Available games updated', { count: combinedGames.length })
 
       // Only stop loading indicator once both initial loads are done
-      if (initialLoadComplete.chess && initialLoadComplete.rangvaar) {
+      if (initialLoadComplete.chess && initialLoadComplete.rangvaar && initialLoadComplete.scambodia) {
         setLoading(false)
       }
     }
     
     // Initial fetch to set loading state correctly
-    Promise.all([getDocs(chessQuery), getDocs(rangvaarQuery)])
-      .then(([chessSnap, rangvaarSnap]) => {
-        processSnapshots(chessSnap, rangvaarSnap)
+    Promise.all([getDocs(chessQuery), getDocs(rangvaarQuery), getDocs(scambodiaQuery)])
+      .then(([chessSnap, rangvaarSnap, scambodiaSnap]) => {
+        processSnapshots(chessSnap, rangvaarSnap, scambodiaSnap)
       }).catch(handleSnapshotError)
       
     // Cleanup listeners
@@ -148,10 +180,11 @@ export default function JoinGame(): JSX.Element {
       logger.debug('JoinGame', 'Cleaning up join game component', { userId: currentUser?.uid })
       unsubChess()
       unsubRangvaar()
+      unsubScambodia()
     }
   }, [navigate, currentUser, isAuthenticated])
 
-  const handleJoinGame = async (gameId: string, wager: number, gameType: 'Chess' | 'Rangvaar'): Promise<void> => {
+  const handleJoinGame = async (gameId: string, wager: number, gameType: 'Chess' | 'Rangvaar' | 'Scambodia'): Promise<void> => {
     if (!currentUser) {
       toast.error("You must be logged in to join a game")
       navigate("/login")
@@ -192,6 +225,26 @@ export default function JoinGame(): JSX.Element {
           userId: currentUser?.uid 
         })
         toast.error(`Failed to join Rangvaar game: ${err.message}`)
+        setLoading(false)
+      }
+    } else if (gameType === 'Scambodia') {
+      // --- Handle Joining Scambodia Game --- //
+      try {
+        await joinScambodiaGame(gameId, currentUser.uid)
+        logger.info('JoinGame', 'Successfully joined Scambodia game', { 
+          gameId, 
+          userId: currentUser.uid 
+        })
+        toast.success("Joined Scambodia game!")
+        navigate(`/game/scambodia/${gameId}`)
+      } catch (error) {
+        const err = error as Error
+        logger.error('JoinGame', 'Error joining Scambodia game', { 
+          error: err, 
+          gameId, 
+          userId: currentUser?.uid 
+        })
+        toast.error(`Failed to join Scambodia game: ${err.message}`)
         setLoading(false)
       }
     } else if (gameType === 'Chess') {
@@ -249,11 +302,6 @@ export default function JoinGame(): JSX.Element {
         toast.error(`Failed to join Chess game: ${err.message}`)
         setLoading(false)
       }
-    } else {
-      // Should not happen with current types
-      logger.error('JoinGame', 'Unknown game type encountered', { gameType })
-      toast.error('Cannot join game: Unknown game type.')
-      setLoading(false)
     }
   }
 
