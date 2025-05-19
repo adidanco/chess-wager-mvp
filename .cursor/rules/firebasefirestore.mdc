@@ -1,0 +1,16 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# Your rule content
+
+- You can @ files here
+- You can use markdown but dont have to
+
+1. Never ask me to deploy firebase functions manually, stage it for deployment and ask me only to press the 'run command' button
+
+2. Keep all firebase infro updated in a file, document structure changes and updates.
+
+3. Firebase region for all functions is 'us-central1' and SDK version used is V2. All implementation should be done accordingly

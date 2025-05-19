@@ -80,6 +80,7 @@ export default function GameCategories(): JSX.Element {
             <button
               key={category.id}
               onClick={() => handleCategorySelect(category.id)}
+              data-cy={`category-btn-${category.id}`}
               className="h-64 rounded-2xl overflow-hidden shadow-lg transform transition-all hover:scale-[1.02] hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-soft-pink"
             >
               <div className={`h-full w-full bg-gradient-to-br ${category.color} p-6 flex flex-col items-center justify-center text-center text-white`}>

@@ -1,11 +1,20 @@
 import React from 'react';
 import { Card, CardPosition, PlayerInfo } from '../../types/scambodia';
+import CardComponent from './CardComponent';
 
 interface OpponentHandProps {
   player: PlayerInfo;
   cards: (Card | null)[];
   onCardClick: (position: CardPosition, playerId: string) => void;
   isTargeting: boolean;
+  peekedCardInfo: { 
+    card: Card, 
+    targetPosition: CardPosition, 
+    targetPlayerId: string, 
+    peekerId: string 
+  } | null;
+  isPeekingActive: boolean;
+  currentUserId: string;
 }
 
 const OpponentHand: React.FC<OpponentHandProps> = ({
@@ -13,9 +22,13 @@ const OpponentHand: React.FC<OpponentHandProps> = ({
   cards,
   onCardClick,
   isTargeting,
+  peekedCardInfo,
+  isPeekingActive,
+  currentUserId,
 }) => {
   return (
-    <div className={`bg-white p-4 rounded-lg shadow-sm border-2 ${isTargeting ? 'border-soft-pink' : 'border-transparent'}`}>
+    <div className={`bg-white p-4 rounded-lg shadow-sm border-2 transition-all duration-300
+      ${isTargeting ? 'border-soft-pink shadow-soft-pink/50 animate-pulse' : 'border-transparent'}`}>
       <div className="flex justify-between items-center mb-2">
         <h3 className="text-sm font-medium">
           {player.username}
@@ -24,30 +37,41 @@ const OpponentHand: React.FC<OpponentHandProps> = ({
           {cards.filter(card => card !== null).length} cards
         </span>
       </div>
+      {isTargeting && (
+        <p className="text-center text-xs text-soft-pink font-medium mb-2">
+          Select a card to target
+        </p>
+      )}
       <div className="grid grid-cols-2 gap-2 max-w-xs mx-auto">
-        {Array.from({ length: 4 }).map((_, index) => {
-          const hasCard = index < cards.length && cards[index] !== null;
+        {cards.map((card, index) => {
           const position = index as CardPosition;
           const isDisabled = !isTargeting;
+          
+          const isTargetOfActivePeek = 
+            isPeekingActive && 
+            peekedCardInfo?.targetPlayerId === player.userId &&
+            peekedCardInfo?.targetPosition === position;
+            
+          const showDataForActivePeek = 
+            isTargetOfActivePeek &&
+            currentUserId === peekedCardInfo?.peekerId;
+
           return (
             <div 
-              key={index} 
-              className={`flex justify-center cursor-${isDisabled ? 'default' : 'pointer'}`}
+              key={position} 
+              className={`flex justify-center ${isDisabled ? 'cursor-default' : 'cursor-pointer'}`}
               onClick={() => !isDisabled && onCardClick(position, player.userId)}
             >
-              {hasCard ? (
-                <div className={`w-14 h-20 bg-gradient-to-br from-deep-purple to-soft-pink rounded-md shadow-sm relative ${isTargeting ? 'hover:ring-2 hover:ring-soft-pink' : ''}`}>
-                  <div className="absolute inset-1 bg-white rounded-sm flex items-center justify-center">
-                    <div className="w-8 h-12 bg-soft-lavender rounded-sm flex items-center justify-center">
-                      <span className="text-deep-purple font-bold text-sm">{index + 1}</span>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="w-14 h-20 bg-gray-100 border border-dashed border-gray-300 rounded-md flex items-center justify-center">
-                  <p className="text-xs text-gray-400">Empty</p>
-                </div>
-              )}
+              <CardComponent
+                card={card}
+                faceUp={false}
+                position={position}
+                onClick={isTargeting ? () => onCardClick(position, player.userId) : undefined}
+                disabled={isDisabled}
+                isHighlighted={isTargeting}
+                isPowerPeeking={isTargetOfActivePeek}
+                powerPeekCardData={showDataForActivePeek ? peekedCardInfo.card : null}
+              />
             </div>
           );
         })}

@@ -23,4 +23,21 @@ export const determinePowerType = (card: Card | null): CardPowerType | null => {
     default:
       return null; // Not a special power card (or invalid card)
   }
-}; 
+};
+
+/**
+ * Deals n cards to each player from the deck.
+ * @param deck Array of cards
+ * @param players Array of player IDs
+ * @param n Number of cards per player
+ * @returns Object mapping player IDs to their hands
+ */
+export function dealCards(deck: Card[], players: string[], n: number): Record<string, Card[]> {
+  const hands: Record<string, Card[]> = {};
+  let deckIndex = 0;
+  for (const player of players) {
+    hands[player] = deck.slice(deckIndex, deckIndex + n);
+    deckIndex += n;
+  }
+  return hands;
+} 

@@ -32,6 +32,7 @@ const GameActions = ({
           iconBgColor="bg-deep-purple"
           actionText="Start Playing"
           onClick={onCreateGame}
+          data-cy="home-action-create-game"
           className="border-2 border-deep-purple/10 hover:border-deep-purple/30"
         />
 

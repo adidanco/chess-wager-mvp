@@ -1,0 +1,13 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# Your rule content
+
+- You can @ files here
+- You can use markdown but dont have to
+
+1. NEVER ASK ME TO MANIPULATE CODE OR DO DEPLOYMENTS OR DO ANYTHING MANUALLY, you are the one who is going to have to do everything, if you are getting stuck at tool calls or are getting repeated errors or getting stuck repeatedly at loops, then stop the response, tell me you need another ATTEMPT, and on my command retry it from scartch in the next response, NEVER EVER ASK OR EXPECT ME TO MAKE ANY SORT OF CHANGES, EDITS or IMPLEMENTATION manually. Yes ofcourse, for things that I absolutely need to do manually, to be able to enable you, yes, that you can ask me. Or let's say you need developer logs or firestore clouf functions logs of course I can manually get them for you, these are examples of things that you can ask me to do manually. Deploying a function or code or editing some parts of code, those are the kind of things you can never expect me to do, you have to keep trying till you figure out a way.
+

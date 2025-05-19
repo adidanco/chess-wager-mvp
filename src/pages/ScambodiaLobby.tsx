@@ -217,8 +217,8 @@ export default function ScambodiaLobby(): JSX.Element {
 
   return (
     <PageLayout>
-      <div className="container mx-auto px-4 py-8 max-w-md">
-        <h1 className="text-2xl font-bold mb-6 text-center text-deep-purple">
+      <div data-cy="scambodia-lobby-main" className="container mx-auto px-4 py-8 max-w-2xl">
+        <h1 data-cy="scambodia-lobby-heading" className="text-2xl font-bold mb-6 text-center text-deep-purple">
           Scambodia Game Lobby
         </h1>
 
@@ -261,7 +261,7 @@ export default function ScambodiaLobby(): JSX.Element {
             <h2 className="text-lg font-semibold mb-3 text-deep-purple">
               Players ({playerCount}/4)
             </h2>
-            <ul className="space-y-2">
+            <ul data-cy="lobby-player-list" className="space-y-2">
               {gameState.players.map((player) => (
                 <li 
                   key={player.userId} 
@@ -304,6 +304,7 @@ export default function ScambodiaLobby(): JSX.Element {
           <div className="space-y-2">
             {!hasJoined && (
               <Button 
+                data-cy="lobby-join-btn"
                 variant="primary" 
                 className="w-full"
                 onClick={handleJoinGame}
@@ -315,6 +316,7 @@ export default function ScambodiaLobby(): JSX.Element {
             
             {canStartGame && (
               <Button 
+                data-cy="lobby-start-btn"
                 variant="success" 
                 className="w-full"
                 onClick={handleStartGame}

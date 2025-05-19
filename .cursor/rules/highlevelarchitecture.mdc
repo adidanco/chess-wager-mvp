@@ -1,0 +1,102 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# Your rule content
+
+- You can @ files here
+- You can use markdown but dont have to
+
+
+1. Security & Trust Are Paramount
+
+Authentication & Authorization
+Implement role-based or permission-based access where needed (e.g., normal users vs. admins, or players vs. organizers).
+Never store passwords or sensitive user data in plain text; always use secure hashing/salting for credentials.
+Keep an eye on potential injection vectors or cross-site scripting if there’s a web component.
+Real Money Flows
+All deposit, withdrawal, and transaction workflows must have thorough validation steps (e.g., verifying balances, preventing double-spend).
+Use secure payment gateways and ensure you have callbacks/webhooks to confirm transaction success or failure.
+Protect user balances with consistent ledger updates so that no unexpected concurrency issues lead to negative or duplicate entries.
+Data Privacy & Encryption
+Sensitive user details (like financial info) should be encrypted both at rest (in your database) and in transit (HTTPS/TLS).
+Logs must never expose personal or financial details.
+2. Modular, Extensible Architecture
+
+Game Modules
+Each game (chess, card games, third-party integrations) should be an isolated module or microservice, providing clean APIs or components.
+Keep game logic encapsulated to avoid accidental cross-game data corruption or collisions.
+Common Services
+Shared features like matchmaking, user profiles, wallet services, analytics, or chat systems should each live in their own logical layer or service.
+This ensures adding or removing a game does not break the rest of the platform.
+Integration Points
+For third-party or AAA games (Fortnite, Valorant), define a consistent approach to hooking into external APIs, game states, or match results.
+If official APIs aren’t available, design around local match data or user-submitted results, but always keep trust measures in place (like a reporting or dispute resolution workflow).
+3. Concurrency, State Management & Real-Time Updates
+
+Strict Turn Order / Sync
+For turn-based games (like card or board games), carefully handle concurrency so only one turn is processed at a time. If using server-based validation, each action must lock or queue until complete.
+Event-Driven Approach
+Real-time updates for match results, wagers, or chat can be powered by an event bus (WebSockets, Socket.IO, or a queue-based system).
+Keep these events lightweight, focusing on just the necessary data to inform clients of state changes.
+Atomic Transactions
+Whenever money or bet amounts are involved, handle them with atomic writes or transactions. If partial updates happen, you could end up with mismatched totals.
+For example, if you’re awarding a prize, do it in a single transaction that debits the game pot and credits the winner’s account.
+4. Performance & Scalability
+
+Session vs. Stateless
+Evaluate where you really need sessions. If possible, lean on stateless approaches for load balancing or horizontal scaling.
+Cache frequently accessed data (e.g., game rules, user profiles) to reduce DB load, but remember to invalidate caches on updates.
+Async & Non-Blocking
+Real-time wagering flows can spike with multiple concurrent matches. Use non-blocking I/O (Node, or equivalent in other stacks) so a large number of simultaneous connections won’t choke the server.
+Offload heavy tasks (like analytics or logs) to worker processes or queues to avoid blocking main game logic.
+Horizontal Scaling
+Keep a separation of concerns so you can scale the matchmaking system, real-money transaction system, and game servers independently.
+Use environment variables or a config service for different deployment environments (dev, staging, prod).
+5. Logging, Monitoring & Observability
+
+Structured Logging
+Tag logs with correlation IDs (request ID, match ID) to easily trace user flows or isolate issues.
+Avoid logging sensitive data, especially for real-money transactions.
+Real-Time Monitoring
+Track system health (CPU/memory usage), game concurrency levels, and wallet transactions in real time.
+Create alerts for anomalies: suspicious betting patterns, repeated transaction failures, or concurrency spikes that exceed normal thresholds.
+Analytics & Crash Reporting
+Collect essential usage analytics: daily active users, match completions, wagers placed, etc.
+Integrate crash/error reporting tools (e.g., Sentry, Datadog) so you see front-end or back-end exceptions quickly.
+6. Testing & QA Best Practices
+
+Unit & Integration Tests
+Each major function or endpoint (bet placements, game creation, user registration) must have coverage.
+For games, test turn logic thoroughly (especially edge cases like forced discards or blind swaps).
+Load & Stress Testing
+Simulate match concurrency, deposit spikes, or chat floods to ensure the system can handle peak loads.
+Security Audits
+Perform basic vulnerability scans or code reviews to check for injection risks, insecure endpoints, or misconfigurations.
+7. Code & Project Governance
+
+Branching & Pull Requests
+Enforce a branching strategy (e.g., GitFlow) so experimental features or new games don’t break the main trunk.
+All merges to main or release branches require at least one code review/approval.
+Documentation
+Keep a simple README or internal wiki for major modules: how to spin up, environment variables, domain logic.
+Summarize function endpoints or relevant data models. Keep it “living” so new devs can jump in quickly.
+Continuous Integration (CI)
+On every push, run lint checks, unit tests, and possibly a staging deployment if feasible.
+Keep a “green build” standard: if tests fail, we don’t merge or deploy.
+8. Internationalization & Local Regulations
+
+Localization
+At a minimum, keep text copy externalized so you can translate easily for new markets.
+Currency or region-specific compliance (like GST or local gambling laws) must be toggled or configured regionally.
+Regulatory Variation
+Real-money gaming is regulated differently across regions. The system must gracefully disable or adapt features in restricted locales.
+Keep location checks or user disclaimers in place where needed.
+9. Future Expandability & VR/AR Considerations
+
+Separate VR/AR Logic
+Even if VR expansions aren’t immediate, keep the code flexible so you can add new front-end “views” or separate apps that talk to the same back-end logic.
+Performance Overhead
+Real-time 3D streams or advanced rendering pipelines might come later. Don’t unnecessarily bloat the MVP codebase with placeholders if you’re not using them yet—just keep the architecture clean for easy extension.

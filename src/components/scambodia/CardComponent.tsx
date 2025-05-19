@@ -1,14 +1,18 @@
 import React from 'react';
-import { Card } from '../../types/scambodia';
+import { Card, Suit, Rank, CardPosition } from '../../types/scambodia';
 
 interface CardComponentProps {
-  card?: Card | null; // Card data (null means discarded/removed)
-  faceUp: boolean; // Whether card is face up or face down
-  position: 0 | 1 | 2 | 3; // Position in 2x2 grid (0=top-left, 1=top-right, 2=bottom-left, 3=bottom-right)
-  isPeeking: boolean; // Whether user is currently peeking at this card
-  isSelected: boolean; // Whether card is selected for an action
-  onClick?: () => void; // Click handler for the card
-  disabled?: boolean; // Whether card is disabled/not selectable
+  card: Card | null;
+  faceUp: boolean;
+  position: CardPosition;
+  onClick?: (position: CardPosition) => void;
+  isSelected?: boolean;
+  isPeeking?: boolean; // For initial peek styling/logic
+  disabled?: boolean;
+  isHighlighted?: boolean; // For targeting indication
+  // Add props for power peeking
+  isPowerPeeking?: boolean; // Is this card being peeked via power?
+  powerPeekCardData?: Card | null; // The actual card data if being power-peeked by current user
 }
 
 /**
@@ -19,11 +23,25 @@ const CardComponent: React.FC<CardComponentProps> = ({
   card,
   faceUp,
   position,
-  isPeeking,
-  isSelected,
   onClick,
-  disabled = false
+  isSelected = false,
+  isPeeking = false,
+  disabled = false,
+  isHighlighted = false,
+  // Destructure new props
+  isPowerPeeking = false,
+  powerPeekCardData = null,
 }) => {
+  const handleClick = () => {
+    if (onClick && !disabled) {
+      onClick(position);
+    }
+  };
+
+  // Determine final card data and face-up status based on power peek
+  const displayCard = isPowerPeeking && powerPeekCardData ? powerPeekCardData : card;
+  const showFaceUp = isPowerPeeking && powerPeekCardData ? true : faceUp;
+
   // Determine card label and styling
   const getSuitSymbol = (suit: string) => {
     switch (suit) {
@@ -35,7 +53,7 @@ const CardComponent: React.FC<CardComponentProps> = ({
     }
   };
 
-  const isRedSuit = card?.suit === 'Hearts' || card?.suit === 'Diamonds';
+  const isRedSuit = displayCard?.suit === 'Hearts' || displayCard?.suit === 'Diamonds';
   
   // Determine the position-based class
   const getPositionClass = () => {
@@ -49,7 +67,7 @@ const CardComponent: React.FC<CardComponentProps> = ({
   };
 
   // If card is null (discarded), show an empty space
-  if (card === null) {
+  if (displayCard === null) {
     return (
       <div 
         className={`w-20 h-28 bg-gray-100 border border-dashed border-gray-300 flex items-center justify-center ${getPositionClass()}`}
@@ -59,18 +77,15 @@ const CardComponent: React.FC<CardComponentProps> = ({
     );
   }
 
-  // Determine if card should be showing front or back
-  const shouldShowFront = faceUp || isPeeking;
-
   return (
     <div
-      onClick={disabled ? undefined : onClick}
+      onClick={handleClick}
       className={`
         w-20 h-28 card-container cursor-pointer transition-transform duration-200
         ${disabled ? 'opacity-60 cursor-not-allowed' : 'hover:scale-105'}
         ${isSelected ? 'ring-2 ring-offset-2 ring-deep-purple' : ''}
         ${getPositionClass()}
-        ${shouldShowFront ? 'card-flipped' : ''}
+        ${showFaceUp ? 'card-flipped' : ''}
       `}
     >
       <div className="card-inner">
@@ -83,30 +98,34 @@ const CardComponent: React.FC<CardComponentProps> = ({
 
         {/* Card Front */}
         <div className="card-front">
-          {card ? (
+          {displayCard && showFaceUp ? (
             <div className="w-full h-full p-1 flex flex-col">
               {/* Card Value/Suit in Top Left */}
               <div className={`text-left line-height-tight ${isRedSuit ? 'text-red-600' : 'text-gray-900'}`}>
-                <div className="text-md font-bold leading-none">{card.rank}</div>
-                <div className="text-lg leading-none">{getSuitSymbol(card.suit)}</div>
+                <div className="text-md font-bold leading-none">{displayCard.rank}</div>
+                <div className="text-lg leading-none">{getSuitSymbol(displayCard.suit)}</div>
               </div>
 
               {/* Card Center */}
               <div className="flex-grow flex items-center justify-center">
                 <span className={`text-3xl ${isRedSuit ? 'text-red-600' : 'text-gray-900'}`}>
-                  {getSuitSymbol(card.suit)}
+                  {getSuitSymbol(displayCard.suit)}
                 </span>
               </div>
 
               {/* Card Value/Suit in Bottom Right (inverted) */}
               <div className={`text-right line-height-tight rotate-180 ${isRedSuit ? 'text-red-600' : 'text-gray-900'}`}>
-                <div className="text-md font-bold leading-none">{card.rank}</div>
-                <div className="text-lg leading-none">{getSuitSymbol(card.suit)}</div>
+                <div className="text-md font-bold leading-none">{displayCard.rank}</div>
+                <div className="text-lg leading-none">{getSuitSymbol(displayCard.suit)}</div>
               </div>
+            </div>
+          ) : displayCard ? (
+            <div className="w-full h-full flex items-center justify-center">
+              <p className="text-gray-400">No Card</p>
             </div>
           ) : (
             <div className="w-full h-full flex items-center justify-center">
-              <p className="text-gray-400">No Card</p>
+              <p className="text-gray-400">Empty</p>
             </div>
           )}
         </div>

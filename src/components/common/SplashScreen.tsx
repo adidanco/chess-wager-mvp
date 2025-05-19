@@ -62,6 +62,8 @@ const SplashScreen: React.FC<SplashScreenProps> = ({
         <div className="w-3 h-3 rounded-full bg-soft-lavender animate-bounce" style={{ animationDelay: '150ms' }}></div>
         <div className="w-3 h-3 rounded-full bg-muted-violet animate-bounce" style={{ animationDelay: '300ms' }}></div>
       </div>
+      {/* Add a hidden button for E2E to skip splash */}
+      <button data-cy="splash-complete" style={{ display: 'none' }} onClick={onComplete}>Skip Splash (E2E)</button>
     </div>
   );
 };

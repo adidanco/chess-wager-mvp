@@ -116,6 +116,7 @@ export default function Login(): JSX.Element {
                 Email
               </label>
               <input
+                data-cy="login-email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -128,6 +129,7 @@ export default function Login(): JSX.Element {
                 Password
               </label>
               <input
+                data-cy="login-password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -136,11 +138,20 @@ export default function Login(): JSX.Element {
               />
             </div>
             <button
+              data-cy="login-submit"
               type="submit"
               disabled={loading}
               className="w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
             >
               {loading ? "Logging in..." : "Login"}
+            </button>
+            <button
+              data-cy="signup-btn"
+              type="button"
+              onClick={() => navigate("/signup")}
+              className="w-full bg-gray-500 text-white py-2 px-4 rounded-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+            >
+              Create Account
             </button>
           </form>
         ) : (

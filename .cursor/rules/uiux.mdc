@@ -1,0 +1,119 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# Your rule content
+
+- You can @ files here
+- You can use markdown but dont have to
+
+
+These rules aren't written in order of importance or preference, numbering is random.
+
+1. UI rendering should be responsive and relative. Prioritise iPhones, Macbooks, iPads, PS5, Xbox but all in all it has to be truly cross-platform, it should 'respond' to the type of device, type of screen, type of inputs (Buttons vs Touch vs Keys). A single cohesive aesthetic across mobile, web, desktop, and console. Use responsive layouts and input-agnostic navigation (touch, mouse, controller) so the experience is intuitive everywhere.
+2. Rangvaar, Scambodia UI/UX should be table top styled and themed
+3. Aim for a “world-like” sense of exploration: dynamic visuals, layered interfaces, and fluid transitions.
+4. Avoid overloading devices: keep animations and 3D elements optimized for minimal performance overhead.
+5. Integrate chat, friend lists, social feeds, party invites, or any such engagement elements directly in the UI. Users should feel they’re part of a living community, not just loading solitary game pages.
+6. Many features revolve around wagering, tournaments, or real-money transactions. Prioritize user confidence: incorporate clean forms, prominent call-to-action (CTA) buttons, clear confirmations, and feedback loops.
+
+7. Brand Mood & Visual Direction :
+- Look and feel :
+Futuristic: Subtle neon glows, gradient backgrounds, modern iconography.
+Vibrant, Yet Minimal: Let color highlights pop against neutral or dark backdrops. Keep overall layout uncluttered.
+Slightly Playful: Rounded corners, dynamic micro-animations on hover/tap, and occasional gamified transitions (e.g., “loading progress bars” shaped like power bars).
+Color Palette (Sample Concept) :
+Primary: A dark neutral (#1D1D29 or #262630) for backgrounds.
+Accent 1: Electric purple/blue (#6E44FF or #5373F3) for key CTAs.
+Accent 2: Vibrant teal (#00C1D4) for secondary highlights or states.
+Highlight: Pastel pink/orange (#F98CAB) for success messages, confetti, or social notifications.
+Typography :
+Choose a modern sans-serif font (e.g., Montserrat, Poppins) with robust weight options.
+Headings in bolder weights for emphasis, body text in medium/regular for legibility.
+Keep line spacing generous to avoid clutter, especially on smaller mobile screens.
+
+
+
+
+
+Core User Flows & Interfaces :
+
+3.1 Home / Main Hub
+Purpose: Provide a panoramic “portal” to everything: wagering games, tournaments, events, social lounge, store, etc.
+Layout:
+Top Navbar: Brand logo, user avatar, notifications icon, and a quick access button to the primary user action (e.g., “Play Now” or “Join a Match”).
+Central “Districts”: Large, card-like buttons or a map-inspired layout that leads to main sections (Wagering, Arcade, Tournaments, Social Lounge, Profile, etc.).
+Scrolling Highlights: A horizontal or vertical carousel showcasing featured games, upcoming tournaments, live streams.
+3.2 Game Browsing & Selection
+Purpose: Let users discover, filter, and select from a library of available games or match types.
+Layout:
+Filter/Category Bar: By genre, skill level, real-money vs. casual, platform type.
+Game Cards: Each card shows the game’s icon, short description, current player count, average stake (if applicable).
+Quick-Play CTA: Tapping a “Play Now” or “Wager Now” button prompts either a matchmaking flow or a match-creation screen.
+3.3 Matchmaking & Wager Setup
+Purpose: Streamlined flow for real-money or friendly wagers.
+Flow:
+Stake Selection: Simple numeric input or predefined buttons (e.g., “Low,” “Medium,” “High” stakes).
+Lobby Display: Show a list of open lobbies or automatically create one, explaining rules & buy-in.
+Confirmation: Summarize total stake, potential win, any fees, and “Join Match” CTA.
+Visually highlight the “wager” aspect with clear disclaimers and an easy toggle between free-to-play or real-money (if supported).
+3.4 In-Game UI Overlays (If Integrated)
+Purpose: Minimal overlay for active match info—score, chat, bets, events.
+Approach:
+Keep the overlay unobtrusive, pinned to corners or as collapsible side panels.
+Include large, legible text for scores, small but eye-catching icons for notifications.
+3.5 Tournaments & Events
+Purpose: Encourage competitive play, unify communities around scheduled events.
+Interface:
+Tournament List View: Summaries of start times, prize pools, participants.
+Bracket/Leaderboard Visualization: Show progress in a bracket or group stage format.
+Registration & Details: Crisp UI showing rules, entry fees, start times, “Register Now” CTA.
+Live Match: Real-time updates or streams embedded for active tournaments.
+3.6 Social & Community Lounge
+Purpose: Central place for chat channels, friend invites, group formation, or finding new teammates.
+Features:
+Chat Feeds: Global lounge, game-specific lobbies, private DMs.
+Friends List & Party System: Quick invites, party creation with a single tap, push notifications.
+Activity Feeds: Who joined or won a match, upcoming events posted by friends, or team updates.
+3.7 Profile, Wallet & Transactions
+Profile:
+Show stats (games played, win rate, achievements), avatar customization, linked social accounts.
+Wallet:
+Balance Overview: Real-money, bonus credits, or in-game currency.
+Deposit / Withdraw Flows: Straightforward, well-labeled forms, secure confirmations.
+Transaction History: Clear breakdown of wagers, wins/losses, deposits, fees.
+3.8 Store & Merchandise (If Applicable)
+Purpose: Sell digital/physical goods, buy game passes or tickets to events, etc.
+Layout:
+Product Grid: Filter by categories (merch, tickets, in-game items, etc.).
+Detail Page: High-quality images, short descriptions, “Add to Cart” CTA, secure checkout flow.
+
+
+Interaction & Micro-Interactions
+
+Animated Transitions
+Subtle page transitions, card flips, or background parallax to hint at a “living” environment.
+Feedback & Confirmation
+Snappy, color-coded toasts or modals for success (e.g., “Bet Placed!”) or errors.
+Loading States
+Use playful progress bars or spinner animations that align with the brand identity—think futuristic progress lines or glowing circles.
+
+
+Responsive & Cross-Platform Considerations
+
+Mobile
+Bottom Nav: Thumb-friendly tab bar for quick access to Home, Matches, Social, Profile.
+Condensed layouts with collapsible menus for filters, settings, or chat.
+Desktop Web
+Sidebar or Top Nav: More room for a vertical navigation panel with direct links to key sections.
+Hover states, shortcuts for quick switching between active windows (e.g., a pinned chat window + match info).
+Console
+Controller-based navigation with clear focus indicators (highlighted cards or tabs).
+Larger text and simplified layouts to accommodate TV viewing distance.
+Scalable Architecture
+Use consistent component libraries or frameworks that adapt fluidly to screen sizes and input methods.
+
+
+

@@ -1,0 +1,30 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# Your rule content
+
+- You can @ files here
+- You can use markdown but dont have to
+
+These rules aren't written in order of importance or preference, numbering is random.
+
+1. NEVER JUMP OR DIVE INTO IMPLEMENTATION OR CODING WHEN THERE's an issue, ALWAYS ANALYSE, DISCUSS THE HIGH LEVEL ISSUES BECAUSE OF WHICH THE ISSUE COULD ARISE, THEN IDENTIFY OUT THEM WHAT IS THE ACTUALY ISSUE AND THEN FOCUS ON FIXING IT, it should be a multi step process every time.
+
+2. Always be on the lookout for additional tools and integrations and extensions that can help you
+
+3. Keep the code clean, modular, architecturally sound. Fixing one error, one component or one part should never break or affect other parts of the project. Implement roubust, comprehensive and thorough testing as well as logging measures as you write code for the first time itself
+
+4. When you make external changes, example to github or to firebase or anything such, document those changes for reference and if we want to backtrack them at some point
+
+5. Always think about relevant logical questions, gaps or edge cases when implementing code, before diving into coding do not be afraid to ask questions, clarify the smallest of details and doubts, and then jump into implementation
+
+6. Do not be afraid to upgrade or update tech stack whenever you see fit
+
+7. Before implementing logic related to core game rules (dealing, turn flow, scoring, powers), confirm the exact rule specification. If a relevant @rule_document.mdc exists, refer to it. If not, explicitly ask the user for clarification on the rule before proceeding with coding. Always always make a technical screenflow, game flow, rules specifications, technical logic documents before implementing a game to maintain context, for reference and for robust implementation and debugging. For already implemented games, or games currently in implementation, do this FIRST.
+
+8.The platform will continually expand with new games, modes, and social features. Design each UI component (cards, modals, panels) to be reusable, and easy to plug in or re-skin. We want the entire architecture to be extremely modular.
+
+9. Don't miss out on any related code or dependencies while fixing an issue or changing code, whenever you fix something, always also check for all relevant pieces that also need to change - whether logically or at code level.

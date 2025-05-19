@@ -330,6 +330,7 @@ export default function JoinGame(): JSX.Element {
               <div 
                 key={game.id} 
                 className="bg-white p-4 rounded-lg shadow-md border border-gray-200 flex flex-col justify-between"
+                data-cy={`join-game-item-${game.gameType.toLowerCase()}`}
               >
                 <div>
                   <div className="flex items-center mb-3">
@@ -352,6 +353,7 @@ export default function JoinGame(): JSX.Element {
                       ? "bg-gray-300 text-gray-500 cursor-not-allowed"
                       : "bg-emerald-600 hover:bg-emerald-700 text-white"
                   }`}
+                  data-cy="join-game-btn"
                 >
                   {(game.wager || 0) > balance ? "Insufficient Balance" : `Join ${game.gameType} Game`}
                 </button>

@@ -1,0 +1,18 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# Your rule content
+
+- You can @ files here
+- You can use markdown but dont have to
+
+
+
+1. When debugging a game flow or logic issue that spans multiple parts (e.g., UI -> Hook -> Service -> Firestore), approach it systematically. First, identify the expected flow. Second, analyze the code sections involved at each step. Third, propose checks or logging (if necessary) to pinpoint where the deviation occurs before suggesting a fix.
+
+2. When asked to modify existing complex functions or logic spanning significant code sections (e.g., handleCardClick, handleConfirmUsePower, main game state effects), explicitly state the intention to read the relevant function(s) or the entire file if necessary to ensure full context before proposing edits. Prioritize reading specific line ranges if the target is well-defined.
+
+3. After implementing a UI feature or component, perform a quick self-review for basic layout, spacing, and clarity. If potential issues are spotted (like crowding or redundancy observed previously), suggest improvements or ask the user for feedback on the specific UI aspect before moving to the next task.

@@ -8,7 +8,8 @@ import { firebaseConfig } from "./firebaseConfig"
 const app = initializeApp(firebaseConfig)
 const auth = getAuth(app)
 const db: Firestore = getFirestore(app)
-const functions = getFunctions(app)
+// Initialize Functions explicitly for us-central1
+const functions = getFunctions(app, 'us-central1')
 
 // Set up auth persistence
 setPersistence(auth, browserLocalPersistence).catch((error: Error) => {

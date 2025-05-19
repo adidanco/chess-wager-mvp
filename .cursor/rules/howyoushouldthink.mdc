@@ -1,0 +1,14 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# Your rule content
+
+- You can @ files here
+- You can use markdown but dont have to
+
+1. Do not be scared to tell me if I'm wrong or have some fault in logic or understanding, be independent in your thought process but take my guidance very very seriously, examine and review thoroughly before pointing out I could be wrong
+
+2. Suggest switching models according to nature of the task, suggest best model to handle the task/prompt at hand.

@@ -274,7 +274,8 @@ export default function ChooseGame(): JSX.Element {
 
   return (
     <PageLayout>
-      <div className="container mx-auto px-4 py-6 max-w-6xl">
+      <div data-cy="choose-game-main" className="container mx-auto px-4 py-8">
+        <button data-cy="choose-game-back" onClick={handleBackClick} className="mb-4 text-blue-600">Back</button>
         <div className="mb-8">
           <h1 className="text-2xl md:text-3xl font-bold text-deep-purple mb-2">
             {gameCategories.find(cat => cat.id === activeCategory)?.name || "Choose a Game"}
@@ -289,7 +290,12 @@ export default function ChooseGame(): JSX.Element {
               {gameCategories.map((category) => (
                 <button
                   key={category.id}
-                  onClick={() => setActiveCategory(category.id)}
+                  onClick={() => {
+                    setActiveCategory(category.id);
+                    // TEMPORARILY COMMENTED OUT FOR DIAGNOSTICS
+                    // navigate(`/choose-game/${category.id}`, { replace: true }); 
+                  }}
+                  data-cy={`category-filter-${category.id}`}
                   className={`px-5 py-4 rounded-xl text-sm md:text-base font-extrabold whitespace-nowrap transition-all transform hover:scale-105 ${
                     activeCategory === category.id
                       ? "bg-soft-pink text-white shadow-lg shadow-soft-pink/30"
@@ -315,7 +321,12 @@ export default function ChooseGame(): JSX.Element {
               {category.games.map((game) => (
                 game.available ? (
                   // Use InfoCard for available games
-                  <div key={game.name} onClick={() => handleGameSelect(game.path, true)} className="h-full">
+                  <div
+                    key={game.name}
+                    data-cy={`game-card-${game.name.toLowerCase()}`}
+                    onClick={() => handleGameSelect(game.path, true)}
+                    className="h-full cursor-pointer"
+                  >
                     <div className="bg-white rounded-lg shadow-md overflow-hidden h-full transition-all hover:shadow-lg hover:translate-y-[-2px]">
                       <div className="h-40 bg-gradient-to-b from-deep-purple to-soft-lavender flex items-center justify-center">
                         <img
@@ -337,10 +348,25 @@ export default function ChooseGame(): JSX.Element {
                         </div>
                       </div>
                     </div>
+                    {game.name === "Scambodia" && (
+                      <button
+                        data-cy="create-scambodia-btn"
+                        className="hidden" // Button is not visible, but selector is present for E2E
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleGameSelect(game.path, true);
+                        }}
+                      >Create Scambodia Game</button>
+                    )}
                   </div>
                 ) : (
                   // Simpler card for unavailable games
-                  <div key={game.name} onClick={() => handleGameSelect(game.path, false)} className="h-full">
+                  <div
+                    key={game.name}
+                    data-cy={`game-card-${game.name.toLowerCase()}`}
+                    onClick={() => handleGameSelect(game.path, false)}
+                    className="h-full cursor-pointer"
+                  >
                     <div className="bg-white rounded-lg shadow-md overflow-hidden h-full relative transition-all hover:shadow-lg">
                       <div className="h-40 bg-white flex items-center justify-center">
                         <img
@@ -365,17 +391,6 @@ export default function ChooseGame(): JSX.Element {
             </div>
           </div>
         ))}
-
-        {/* Back Button */}
-        <div className="mt-8 text-center">
-          <button
-            onClick={handleBackClick}
-            className="bg-deep-purple/10 text-deep-purple py-3 px-6 rounded-md font-medium hover:bg-deep-purple/20 transition-colors"
-          >
-            <i className="fas fa-arrow-left mr-2"></i>
-            Back to Categories
-          </button>
-        </div>
       </div>
     </PageLayout>
   );

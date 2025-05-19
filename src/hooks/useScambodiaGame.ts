@@ -20,7 +20,15 @@ import {
   attemptMatch as attemptMatchService,
   declareScambodia as declareScambodiaService,
   usePower as usePowerService,
-  endTurn as endTurnService
+  forceGameEndDebug as forceGameEndDebugService,
+  forceRoundEndDebug as forceRoundEndDebugService,
+  triggerScoreCalculation as triggerScoreCalculationService,
+  transitionScambodiaRound as transitionScambodiaRoundService,
+  forceScoreRoundDebug as forceScoreRoundDebugService,
+  initiatePower as initiatePowerService,
+  resolvePowerTarget as resolvePowerTargetService,
+  skipPower as skipPowerService,
+  ignorePendingPower as ignorePendingPowerService,
 } from '../services/scambodiaService';
 
 /**
@@ -147,50 +155,105 @@ export const useScambodiaGame = (gameId: string | undefined): UseScambodiaGameRe
     };
   }, [gameId, error]);
 
-  // --- Round Transition Effect ---
+  // Keep track of rounds for which scoring/transition has been triggered
+  const scoringTriggeredRef = useRef<Set<number>>(new Set());
+  const transitionTriggeredRef = useRef<Set<number>>(new Set());
+
+  // --- Score Calculation Trigger Effect ---
   useEffect(() => {
     if (!gameId || !gameState || !currentUser) return;
     
-    const currentRound = gameState.currentRoundNumber;
-    const currentRoundState = gameState.rounds[currentRound];
+    const currentRoundNumber = gameState.currentRoundNumber;
+    const currentRoundState = gameState.rounds[currentRoundNumber];
     
-    // Check for round in Scoring phase that needs transition
+    // Check if round is in Scoring phase and scoring hasn't been triggered yet for this round
     if (
       gameState.status === 'Playing' && 
       currentRoundState?.phase === 'Scoring' && 
-      hasTriggeredNextRoundRef.current < currentRound
+      !scoringTriggeredRef.current.has(currentRoundNumber) // Check ref
     ) {
-      logger.info('useScambodiaGame', 'Detected scoring phase, triggering round transition', { 
+      logger.info('useScambodiaGame (Scoring Effect)', 'Detected Scoring phase, triggering calculation', { 
         gameId, 
-        currentRound 
+        currentRoundNumber 
+      });
+      
+      // Mark scoring as triggered for this round
+      scoringTriggeredRef.current.add(currentRoundNumber);
+      
+      // Refresh token and call Cloud Function
+      refreshTokenIfNeeded().then(success => {
+        if (!success) {
+          logger.error('useScambodiaGame (Scoring Effect)', 'Score calculation aborted: Failed to refresh token', { gameId });
+          // Optionally reset ref if needed: scoringTriggeredRef.current.delete(currentRoundNumber);
+          return;
+        }
+        
+        triggerScoreCalculationService(gameId, currentRoundNumber)
+          .then(() => {
+            logger.info('useScambodiaGame (Scoring Effect)', 'Score calculation triggered successfully', { gameId, currentRoundNumber });
+            // State update will eventually change phase to 'RoundComplete' triggering the next effect
+          })
+          .catch((err: any) => {
+            logger.error('useScambodiaGame (Scoring Effect)', 'Error triggering score calculation', { 
+              gameId, 
+              currentRoundNumber, 
+              error: err 
+            });
+            toast.error('Error calculating round scores.');
+            // Optionally reset ref on error: scoringTriggeredRef.current.delete(currentRoundNumber);
+          });
+      });
+    }
+  }, [gameId, gameState, currentUser, refreshTokenIfNeeded, triggerScoreCalculationService]); // Add dependency
+
+  // --- Round Transition Effect (Now triggered by RoundComplete) ---
+  useEffect(() => {
+    if (!gameId || !gameState || !currentUser) return;
+    
+    const currentRoundNumber = gameState.currentRoundNumber;
+    const currentRoundState = gameState.rounds[currentRoundNumber];
+    
+    // Check for round in RoundComplete phase that needs transition
+    if (
+      gameState.status === 'Playing' && // Game must still be technically 'Playing' until finish or next round starts
+      currentRoundState?.phase === 'Complete' && // Corrected from 'RoundComplete' to 'Complete'
+      !transitionTriggeredRef.current.has(currentRoundNumber) // Check ref
+    ) {
+      logger.info('useScambodiaGame (Transition Effect)', 'Detected Complete phase, triggering transition', { 
+        gameId, 
+        currentRoundNumber 
       });
       
       // Mark this round transition as triggered
-      hasTriggeredNextRoundRef.current = currentRound;
+      transitionTriggeredRef.current.add(currentRoundNumber);
       
-      // Refresh token before calling Cloud Function
+      // Refresh token and call Cloud Function
       refreshTokenIfNeeded().then(success => {
         if (!success) {
-          logger.error('useScambodiaGame', 'Round transition aborted: Failed to refresh token', { gameId });
+          logger.error('useScambodiaGame (Transition Effect)', 'Round transition aborted: Failed to refresh token', { gameId });
+          // Optionally reset ref: transitionTriggeredRef.current.delete(currentRoundNumber);
           return;
         }
         
         // Call Cloud Function to handle transition
-        transitionScambodiaRoundFn({ gameId, currentRoundNumber: currentRound })
+        transitionScambodiaRoundService({ gameId, currentRoundNumber })
           .then(() => {
-            logger.info('useScambodiaGame', 'Round transition initiated successfully', { gameId, currentRound });
+            logger.info('useScambodiaGame (Transition Effect)', 'Round transition initiated successfully', { gameId, currentRoundNumber });
+             // Clear the scoring triggered flag for the *next* potential round if needed, though refs reset on unmount
+             // scoringTriggeredRef.current.delete(currentRoundNumber + 1); // Or handle differently
           })
-          .catch((err) => {
-            logger.error('useScambodiaGame', 'Error triggering round transition', { 
+          .catch((err: any) => { 
+            logger.error('useScambodiaGame (Transition Effect)', 'Error triggering round transition', { 
               gameId, 
-              currentRound, 
+              currentRoundNumber, 
               error: err 
             });
-            toast.error('Error transitioning to next round. Please try refreshing the page.');
+            toast.error('Error transitioning to next round/ending game.');
+            // Optionally reset ref on error: transitionTriggeredRef.current.delete(currentRoundNumber);
           });
       });
     }
-  }, [gameId, gameState, currentUser, refreshTokenIfNeeded, transitionScambodiaRoundFn]);
+  }, [gameId, gameState, currentUser, refreshTokenIfNeeded, transitionScambodiaRoundService]);
 
   // --- Payout Trigger Effect ---
   useEffect(() => {
@@ -328,17 +391,41 @@ export const useScambodiaGame = (gameId: string | undefined): UseScambodiaGameRe
     });
   }, [performAction, gameId, currentUser]);
 
-  const usePower = useCallback(async (powerType: CardPowerType, params: any) => {
-    await performAction('usePower', async () => {
-      await usePowerService(gameId!, currentUser!.uid, powerType, params);
+  // NEW Callbacks for the refined power flow
+  const initiatePower = useCallback(async (powerType: CardPowerType) => {
+    return await performAction('initiatePower', async () => {
+      if (!gameId) throw new Error('Game ID missing');
+      await initiatePowerService(gameId, powerType);
+      // Client UI state (like showing targeting) will update via Firestore listener
     });
-  }, [performAction, gameId, currentUser]);
+  }, [performAction, gameId]);
 
-  const endTurn = useCallback(async () => {
-    await performAction('endTurn', async () => {
-      await endTurnService(gameId!, currentUser!.uid);
-      // Optionally clear drawn card state here if applicable after ending turn
-      // setDrawnCard(null); 
+  const resolvePowerTarget = useCallback(async (targetData: any) => {
+    return await performAction('resolvePowerTarget', async () => {
+      if (!gameId) throw new Error('Game ID missing');
+      await resolvePowerTargetService(gameId, targetData);
+      // Server handles effect, discard, and turn advancement
+    });
+  }, [performAction, gameId]);
+
+  const skipPower = useCallback(async () => {
+    // This is now intended to be called ONLY when actively selecting targets 
+    // (i.e., after initiatePower was called)
+    if (!gameState?.rounds[gameState.currentRoundNumber]?.activePowerResolution) {
+        toast.error("No active power resolution to skip/cancel.");
+        return;
+    }
+    await performAction('skipPower', async () => {
+      if (!gameId) throw new Error('Game ID missing');
+      await skipPowerService(gameId);
+      // Server handles discard and turn advancement
+    });
+  }, [performAction, gameId, gameState]);
+
+  const ignorePendingPower = useCallback(async () => {
+    return await performAction('ignorePendingPower', async () => {
+      if (!gameId) throw new Error('Game ID missing');
+      await ignorePendingPowerService(gameId, currentUser!.uid);
     });
   }, [performAction, gameId, currentUser]);
 
@@ -350,6 +437,19 @@ export const useScambodiaGame = (gameId: string | undefined): UseScambodiaGameRe
     toast('Logged current game state to console.');
   }, [gameState, drawnCard]);
 
+  const forceGameEnd = useCallback(async (winningPlayerId: string) => {
+    await performAction('forceGameEndDebug', async () => {
+      await forceGameEndDebugService(gameId!, winningPlayerId);
+    });
+  }, [performAction, gameId]);
+
+  const forceScoreRound = useCallback(async (winningPlayerId: string) => {
+    if (!gameState) return;
+    await performAction('forceScoreRoundDebug', async () => {
+      await forceScoreRoundDebugService(gameId!, winningPlayerId, gameState.currentRoundNumber);
+    });
+  }, [performAction, gameId, gameState]);
+
   return {
     gameState,
     loading,
@@ -359,9 +459,14 @@ export const useScambodiaGame = (gameId: string | undefined): UseScambodiaGameRe
     discardDrawnCard,
     attemptMatch,
     declareScambodia,
-    usePower,
-    endTurn,
+    // Add new power functions
+    initiatePower,
+    resolvePowerTarget,
+    skipPower,
+    ignorePendingPower,
     logGameState,
-    drawnCard // Expose drawnCard to the component
+    drawnCard, // Expose drawnCard to the component
+    forceGameEnd,
+    forceScoreRound,
   };
 }; 

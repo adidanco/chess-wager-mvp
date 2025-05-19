@@ -110,6 +110,7 @@ export default function CreateScambodiaGame(): JSX.Element {
                 Wager Amount (₹ per player)
               </label>
               <input
+                data-cy="wager-input"
                 type="number"
                 min="10"
                 max="1000"
@@ -127,7 +128,7 @@ export default function CreateScambodiaGame(): JSX.Element {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Number of Rounds
               </label>
-              <div className="flex gap-2">
+              <div data-cy="rounds-selector" className="flex gap-2">
                 {[1, 3, 5].map((rounds) => (
                   <button
                     key={rounds}
@@ -147,6 +148,7 @@ export default function CreateScambodiaGame(): JSX.Element {
             
             <div className="space-y-2">
               <Button
+                data-cy="create-game-submit"
                 variant="success"
                 type="submit"
                 className="w-full"
@@ -178,7 +180,7 @@ export default function CreateScambodiaGame(): JSX.Element {
         </Card>
         
         <div className="mt-6 bg-blue-50 p-4 rounded-md text-sm">
-          <h2 className="font-medium text-blue-800 mb-1">About Scambodia</h2>
+          <h2 data-cy="about-scambodia" className="font-medium text-blue-800 mb-1">About Scambodia</h2>
           <ul className="text-blue-700 list-disc list-inside space-y-1">
             <li>Card memory game for 2-4 players</li>
             <li>Each player starts with 4 face-down cards</li>

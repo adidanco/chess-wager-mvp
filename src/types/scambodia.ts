@@ -9,6 +9,7 @@ export interface Card {
   rank: Rank;
   id: string; // Unique ID for React keys, e.g., "H7", "C10"
   value: number; // Numerical value for scoring (0-13)
+  redKingZeroValueActive?: boolean; // Flag for Red King special power
 }
 
 // Player Information
@@ -76,17 +77,25 @@ export interface RoundState {
   currentTurnPlayerId?: string;
   playerCards: { [playerId: string]: (Card | null)[] }; // 2x2 grid, null means discarded
   // Allow numbers (own card index) or strings ("opponentId:index") for opponent peek
-  visibleToPlayer: { [playerId: string]: (CardPosition | string)[] }; 
+  visibleToPlayer: { [playerId: string]: (CardPosition | string)[] };
   discardPile: Card[];
   drawPile: Card[];
-  drawnCard: Card | null; // Card currently drawn by a player 
+  drawnCard: Card | null; // Card currently drawn by a player
   drawnCardUserId: string | null; // ID of player who drew the card
+  drawnCardSource?: 'deck' | 'discard' | null; // Add field to track source
+  pendingPowerDecision?: { card: Card } | null; // Card drawn from deck is 7-K
+  activePowerResolution?: {
+    card: Card;
+    type: CardPowerType;
+    step: 'SelectingTarget' | 'EffectApplied';
+    targetData?: any; // Store target info (e.g., { cardIndex: 2 } or { targetPlayerId: '...', targetCardIndex: 1 })
+  } | null; // Power is being actively resolved
   playerDeclaredScambodia?: string; // Player who declared "Scambodia"
   actions: Action[]; // Use the union type Action
   scores: { [playerId: string]: number }; // Final scores for this round
   roundWinnerId?: string; // Player with lowest score (or who discarded all cards)
   cardPowersUsed: CardPowerAction[]; // Record of all special powers used
-  initialPeekCompleted?: boolean; // Add the new flag here (optional)
+  playersCompletedPeek: string[]; // Array of player IDs who have finished the initial peek
   scambodiaCorrect?: boolean; // Add flag for correct Scambodia call
 }
 
@@ -127,9 +136,13 @@ export interface UseScambodiaGameReturn {
   discardDrawnCard: () => Promise<Card | null>;
   attemptMatch: (cardPosition: CardPosition) => Promise<boolean | null>;
   declareScambodia: () => Promise<void>;
-  usePower: (powerType: CardPowerType, params: any) => Promise<void>;
-  // Game flow
-  endTurn: () => Promise<void>;
+  // NEW Power Flow Actions
+  initiatePower: (powerType: CardPowerType) => Promise<void>;
+  resolvePowerTarget: (targetData: any) => Promise<void>;
+  skipPower: () => Promise<void>;
+  ignorePendingPower: () => Promise<void>;
   // Debug functions (for development)
   logGameState: () => void;
+  forceGameEnd: (winningPlayerId: string) => Promise<void>;
+  forceScoreRound: (winningPlayerId: string) => Promise<void>;
 } 

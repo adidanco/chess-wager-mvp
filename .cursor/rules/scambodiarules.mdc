@@ -1,0 +1,147 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# Your rule content
+
+- You can @ files here
+- You can use markdown but dont have to
+
+NOTE: Always keep updating this, or make a rules document and keep updating it.
+
+Below is a comprehensive Scambodia rulebook compiled from all the details we’ve discussed. It includes the gameplay objective, card values, special actions, scoring rules, and all relevant clarifications, so any player (or developer) can reference a single source of truth.
+
+SCAMBODIA: THE OFFICIAL RULEBOOK
+
+1. Overview
+
+Scambodia is a memory-based, shedding-style card game played with 2–4 players using a standard deck of 52 cards. The goal is to keep your total card value as low as possible and strategically declare “Scambodia” when you believe you have the lowest total among all players.
+
+2. Deck & Card Values
+
+Deck
+A standard deck of 52 cards, each identified by suit and rank.
+Suits: Hearts (♥), Diamonds (♦), Clubs (♣), Spades (♠).
+Ranks: 0 (if using a specialized deck), 1, 2, 3, …, 10, Jack (J=11), Queen (Q=12), King (K=13).
+Card Values
+Number Cards: The value equals the rank (e.g., 2 = 2 points, 9 = 9 points).
+Face Cards:
+Jack (J) = 11
+Queen (Q) = 12
+King (K) of Black Suits (♣♠) = 13
+King (K) of Red Suits (♥♦) = 0 (special case)
+Aces (if present) can be treated as 1 or 0—based on your deck variant. If using ranks 0–13 explicitly, 0 typically replaces Ace.
+3. Setup
+
+Players
+2–4 players.
+Each player is dealt a 2×2 grid of cards (four face-down cards total).
+Draw & Discard Piles
+Shuffle the deck thoroughly.
+Deal 4 cards face down to each player.
+Place the remaining deck face down to form the draw pile.
+Flip the top card of the draw pile face up to start the discard pile.
+Initial Peek
+Each player secretly looks at their bottom two cards (only once), memorizes them, then places them face down again.
+The top two cards remain unknown to the player unless revealed by gameplay or special actions.
+4. Gameplay & Turn Structure
+
+Turn Order
+Players take turns in a clockwise direction.
+On a player’s turn, exactly one action can be performed.
+Available Actions
+Draw from the Deck
+Draw the top card from the face-down deck.
+The player may either:
+Exchange: Replace (face down) one of their 4 cards with the drawn card. The replaced card is then discarded face up onto the discard pile.
+Discard: If the player doesn’t want the drawn card, they immediately discard it face up onto the discard pile (thus not changing their own 4 cards).
+Draw from the Discard
+Pick up the top face-up card from the discard pile.
+Must exchange one of their 4 face-down cards with the drawn discard card; the replaced card goes onto the discard pile face up.
+Match & Discard
+The player declares they believe one of their face-down cards matches the top card of the discard pile in rank.
+They flip that face-down card:
+If it does match, the flipped card is immediately discarded. The player’s total hand size decreases by 1 (now they have 3 cards).
+Players can keep discarding across turns if they continue to match. If a player’s hand reaches 0, they effectively have 0 points and the round ends.
+If it does not match, they forcibly exchange that newly revealed card with the top of the discard pile.
+Declare “Scambodia”
+The player asserts they have (or will soon have) the lowest total among all players.
+That round is triggered to end: each other player gets one final turn. Then everyone reveals and scores.
+Special Card Powers
+If a player draws from deck (and then discards) a 7, 8, 9, 10, J, Q, or K, they have an optional special ability:
+7 / 8: Peek at one of your own face-down cards.
+9 / 10: Peek at one face-down card of an opponent’s choice.
+J / Q (Jack/Queen): Blind Swap – choose one of your own face-down cards and one of an opponent’s face-down cards. Swap them without looking at either card.
+K (King): Seen Swap – first peek at one of an opponent’s cards. Then decide if you wish to swap it with one of your own face-down cards (which remains unknown to you).
+Redemption:
+
+To use a power, the player must discard that special card on the same turn they drew it.
+When discarding it, the player may choose to redeem (use) or ignore (skip) the special effect.
+5. Round End & Scoring
+
+Ending the Round
+A round ends in one of two ways:
+Scambodia Declared: The declaring player’s turn ends immediately, and every other player takes one more turn. Then the round stops.
+Player’s Hand Reaches 0: If a player successfully discards all their cards, the round ends immediately (no further turns).
+Revealing Cards
+All players flip their remaining face-down cards.
+Each player calculates the sum of their card values.
+Scoring
+If the Scambodia declarer indeed has the lowest unique total, their round score is 0.
+If the Scambodia declarer does not have the lowest total (e.g., they tie or another player is lower), the declarer’s round score doubles (2 × sum of their card values).
+All other players simply add the sum of their card values to their running total.
+If a player discarded all their cards (hand=0), their round score is 0.
+Ties
+If two or more non-declarers tie for the lowest total, they just keep that sum; there’s no special penalty or bonus.
+If the declarer is part of that tie, they fail to be uniquely lowest, so they double their sum.
+Multiple Rounds
+Repeat the deal and gameplay for the chosen number of rounds (1, 2, 3, or 5).
+Keep a cumulative total of points across all rounds.
+Game End & Tie-Breaks
+After completing the chosen rounds, the player with the lowest total points is the winner.
+If there’s a tie in total points, the player who successfully declared “Scambodia” more times overall wins.
+If still tied, the final payout or victory is shared among those tied players.
+6. Optional Rules (Online or Timed Play)
+
+Turn Timer (Future Implementation)
+A standard 60-second clock can be used to ensure pace. If a player times out once, a random move is made for them; timing out a second time may kick them from the game.
+Disconnections
+If a player disconnects, you may auto-remove them or let an “AI” perform minimal safe moves until they return.
+Deck Exhaustion
+If the draw pile empties, reshuffle the discard pile into a new draw deck, preserving the top card of the discard.
+7. Additional Clarifications
+
+Kings
+Black Kings = 13 points
+Red Kings = 0 points
+Special “Seen Swap” power if drawn and discarded the same turn.
+Memory Aspect
+Except for bottom two initial peeks, face-down cards remain hidden.
+Players rely on memory, special peeks, or prior discards to guess card positions.
+Hand Size Changes
+Normally each player holds 4 cards.
+Matching can reduce your hand size to 3, 2, 1, or 0.
+If you ever reach 0, you effectively end that round, scoring 0 points.
+Scambodia Declaration
+Only one Scambodia call can happen per round (the moment it’s called, that’s final).
+The declaer must declare before taking any other action that turn.
+Tied for Lowest Score
+The declarer’s success depends on being the sole lowest. If they tie, they fail.
+Gameplay Example
+Player A draws from deck → discards a 9 → activates the “peek at opponent’s card” ability → chooses Player B’s top-left card, sees it’s a 10 → returns to normal flow.
+Next turn, Player B tries to match the top of discard (9) with a random face-down card. If they guess incorrectly, they must forcibly swap that revealed card with the discard pile’s top card.
+8. Winning the Game
+
+Objective
+Minimize your cumulative score across the set number of rounds.
+Skilled memory, timing your special card usage, and strategic “Scambodia” declarations are key to victory.
+Tournament or Cash-Play Modes
+In a wagering environment, the pot or stake might be awarded to the overall winner, or split if there’s a final tie under certain conditions.
+Conclusion
+
+Scambodia provides a lively mix of memory, strategy, and risk. Players must balance the desire to keep card values low with the opportunity to correctly declare Scambodia. Strategic use of special card powers—and the gamble of matching face-down cards—can swing momentum quickly. Whether playing casually or for real stakes, Scambodia is an engaging game for any table of 2–4 players.
+
+End of Official Rulebook
+

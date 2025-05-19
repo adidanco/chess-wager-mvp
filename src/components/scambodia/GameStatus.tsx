@@ -50,7 +50,7 @@ const GameStatus: React.FC<GameStatusProps> = ({
       <div className="flex flex-col md:flex-row md:items-center md:justify-between">
         <div className="flex items-center mb-2 md:mb-0">
           <div className="bg-deep-purple/10 px-3 py-1 rounded-full text-deep-purple font-medium mr-3">
-            Round {gameState.currentRoundNumber + 1}/{gameState.totalRounds}
+            Round {gameState.currentRoundNumber}/{gameState.totalRounds}
           </div>
           <div className="bg-soft-lavender/20 px-3 py-1 rounded-full text-soft-pink font-medium">
             {formatPhase(currentRound.phase)}

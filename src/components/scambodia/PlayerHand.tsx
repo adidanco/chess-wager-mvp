@@ -10,7 +10,15 @@ interface PlayerHandProps {
   onCardClick?: (position: CardPosition) => void;  // Card click handler
   canSelectCard: boolean;  // Whether player can select cards currently
   currentPhase: string;  // Current game phase
-  isTargeting?: boolean;  // Is player targeting their own hand for a power?
+  isTargeting: boolean;
+  peekedCardInfo: { 
+    card: Card, 
+    targetPosition: CardPosition, 
+    targetPlayerId: string, 
+    peekerId: string 
+  } | null;
+  isPeekingActive: boolean;
+  currentUserId: string;
 }
 
 /**
@@ -25,7 +33,10 @@ const PlayerHand: React.FC<PlayerHandProps> = ({
   onCardClick,
   canSelectCard,
   currentPhase,
-  isTargeting
+  isTargeting,
+  peekedCardInfo,
+  isPeekingActive,
+  currentUserId
 }) => {
   const handleCardClick = (position: CardPosition) => {
     if (isMyTurn && canSelectCard && onCardClick) {
@@ -40,78 +51,59 @@ const PlayerHand: React.FC<PlayerHandProps> = ({
 
   return (
     <div className="relative">
-      <div className="mb-3 text-center">
-        <h3 className="text-deep-purple font-semibold text-lg">Your Hand</h3>
-        <p className="text-xs text-gray-600">
-          {currentPhase === 'Setup' && 'Starting the game - you can see your bottom two cards'}
-          {currentPhase === 'Playing' && isMyTurn && 'Your turn - select a card to act on it'}
-          {currentPhase === 'Playing' && !isMyTurn && 'Waiting for other player to take their turn'}
-          {currentPhase === 'FinalTurn' && 'Final round after Scambodia was declared'}
-          {currentPhase === 'Scoring' && 'Round ended - calculating scores'}
-          {currentPhase === 'Complete' && 'Round complete'}
-        </p>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4 max-w-xs mx-auto">
-        {/* Top row (positions 0 and 1) */}
-        <div>
-          <CardComponent
-            card={cards[0]}
-            faceUp={isCardFaceUp(0)}
-            position={0}
-            isPeeking={false}
-            isSelected={selectedCardPosition === 0}
-            onClick={() => handleCardClick(0)}
-            disabled={!canSelectCard || cards[0] === null}
-          />
-        </div>
-        
-        <div>
-          <CardComponent
-            card={cards[1]} 
-            faceUp={isCardFaceUp(1)}
-            position={1}
-            isPeeking={false}
-            isSelected={selectedCardPosition === 1}
-            onClick={() => handleCardClick(1)}
-            disabled={!canSelectCard || cards[1] === null}
-          />
-        </div>
-        
-        {/* Bottom row (positions 2 and 3) */}
-        <div>
-          <CardComponent
-            card={cards[2]}
-            faceUp={isCardFaceUp(2)}
-            position={2}
-            isPeeking={false}
-            isSelected={selectedCardPosition === 2}
-            onClick={() => handleCardClick(2)}
-            disabled={!canSelectCard || cards[2] === null}
-          />
-        </div>
-        
-        <div>
-          <CardComponent
-            card={cards[3]}
-            faceUp={isCardFaceUp(3)}
-            position={3}
-            isPeeking={false}
-            isSelected={selectedCardPosition === 3}
-            onClick={() => handleCardClick(3)}
-            disabled={!canSelectCard || cards[3] === null}
-          />
-        </div>
-      </div>
-
-      {/* Turn indicator */}
+      {/* Turn indicator - positioned above the content with more spacing */}
       {isMyTurn && (
-        <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-full mb-2">
-          <div className="bg-green-500 text-white text-xs px-2 py-1 rounded-t-lg animate-pulse">
+        <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-full mb-6">
+          <div className="bg-green-500 text-white px-4 py-1 rounded-lg font-medium animate-pulse">
             Your Turn
           </div>
         </div>
       )}
+
+      {/* Add more top padding when it's the player's turn to create space after the Your Turn indicator */}
+      <div className={`text-center ${isMyTurn ? 'mt-6' : 'mt-2'}`}>
+        {/* Always show "Your Hand" heading, but with different styling based on turn */}
+        <h3 className={`font-semibold text-lg mb-1 ${isMyTurn ? 'text-deep-purple' : 'text-gray-700'}`}>
+          Your Hand
+        </h3>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 max-w-xs mx-auto">
+        {[0, 1, 2, 3].map((index) => {
+          const position = index as CardPosition;
+          const card = cards[position];
+          const isVisible = visibleCardPositions.includes(position);
+          const isSelected = selectedCardPosition === position;
+          const isDisabled = !canSelectCard || card === null;
+
+          // Check if this specific card is the target of the currently active peek
+          const isTargetOfActivePeek = 
+            isPeekingActive && 
+            peekedCardInfo?.targetPlayerId === currentUserId && // Target is self
+            peekedCardInfo?.targetPosition === position;
+
+          // Check if the current user is the one who initiated the peek
+          const showDataForActivePeek = 
+            isTargetOfActivePeek && 
+            currentUserId === peekedCardInfo?.peekerId;
+
+          return (
+            <div key={position}>
+              <CardComponent
+                card={card}
+                faceUp={isVisible} // Base visibility
+                position={position}
+                onClick={() => handleCardClick(position)}
+                isSelected={isSelected}
+                disabled={isDisabled}
+                isHighlighted={isTargeting} // Highlight all if targeting own hand
+                isPowerPeeking={isTargetOfActivePeek} // Is THIS card being peeked?
+                powerPeekCardData={showDataForActivePeek ? peekedCardInfo.card : null} // Pass data only if current user initiated peek
+              />
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 };

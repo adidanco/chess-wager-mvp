@@ -80,7 +80,24 @@ const SpecialPower: React.FC<SpecialPowerProps> = ({
   };
 
   const getTargetSummary = (): string => {
-    if (!targetsSelected()) return "Select target(s) by clicking on the game board.";
+    if (!targetsSelected()) {
+      // Add more detailed debugging info to help players understand what they need to select
+      switch (powerType) {
+        case 'Peek_Own':
+          return `Select one of your cards to peek at. ${powerTarget_OwnCardIndex === null ? 'No card selected yet.' : ''}`;
+        case 'Peek_Opponent':
+          return `Select an opponent's card to peek at. ${powerTarget_OpponentId === null ? 'Select an opponent first.' : powerTarget_OpponentCardIndex === null ? 'Now select their card.' : ''}`;
+        case 'Blind_Swap':
+        case 'Seen_Swap':
+          let msg = `Select one of your cards and one opponent's card to swap. `;
+          if (powerTarget_OwnCardIndex === null) msg += 'Select your card first. ';
+          else if (powerTarget_OpponentId === null) msg += 'Now select an opponent. ';
+          else if (powerTarget_OpponentCardIndex === null) msg += 'Now select their card. ';
+          return msg;
+        default:
+          return "Select target(s) by clicking on the game board.";
+      }
+    }
 
     const opponentUsername = powerTarget_OpponentId ? getPlayerUsername(players, powerTarget_OpponentId) : 'Opponent';
 
@@ -98,14 +115,15 @@ const SpecialPower: React.FC<SpecialPowerProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg p-5 max-w-md w-full shadow-lg">
+    <div className="fixed top-0 left-0 right-0 z-40 p-4 flex justify-center pointer-events-none">
+      <div className="bg-white/95 border-2 border-soft-pink rounded-lg p-5 max-w-md w-full shadow-lg pointer-events-auto">
         <div className="text-center mb-4">
-          <h3 className="text-xl font-bold text-deep-purple mb-2">Confirm Special Power: {specialCard.rank} of {specialCard.suit}</h3>
+          <span className="bg-soft-pink text-white px-3 py-1 rounded-full text-sm font-medium animate-pulse inline-block mb-2">SELECT TARGET ON GAME BOARD</span>
+          <h3 className="text-xl font-bold text-deep-purple mb-1">Special Power: {specialCard.rank} of {specialCard.suit}</h3>
         </div>
 
         {/* Display Power Description */}
-        <div className="bg-blue-50 p-3 rounded-md mb-4">
+        <div className="bg-blue-50 p-3 rounded-md mb-3">
           <p className="text-blue-700 text-sm">
             <span className="font-medium">Effect: </span>
             {getPowerDescription(powerType)}
@@ -113,21 +131,21 @@ const SpecialPower: React.FC<SpecialPowerProps> = ({
         </div>
 
         {/* Display Target Summary */}
-        <div className="bg-gray-50 p-3 rounded-md mb-4">
+        <div className="bg-gray-50 p-3 rounded-md mb-3">
            <p className="text-gray-700 text-sm text-center">
              {getTargetSummary()}
            </p>
         </div>
 
         {/* Action Buttons */}
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2">
           <Button
             variant="primary"
             className="w-full"
             onClick={onUseSpecialPower}
             disabled={isSubmitting || !powerType || !targetsSelected()} // Disable if targets not yet selected
           >
-            {isSubmitting ? 'Using...' : 'Confirm Use Power'}
+            {isSubmitting ? 'Using...' : `Confirm Use Power${!targetsSelected() ? ' (Select targets first)' : ''}`}
           </Button>
            <Button
             variant="secondary"

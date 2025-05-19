@@ -1,0 +1,284 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# Your rule content
+
+- You can @ files here
+- You can use markdown but dont have to
+
+NOTE: Always keep updating this, or make a rules document and keep updating it.
+
+Below is a consolidated rule book incorporating both the standard Rangvaar rules and your customizations/clarifications. Everything is organized step-by-step to ensure clarity and thoroughness.
+
+---
+
+1. OVERVIEW
+
+---
+
+Court Piece (also known as Coat Piece, Hokm, or Rung) is a trick-taking card game typically played with four players in partnerships. In this variant:
+
+- Each of the four players contributes a monetary wager.
+- A single GAME consists of multiple ROUNDS (3 or 5).
+- Teams accumulate trick points over these rounds, and the winning team claims the pot (minus any platform commission).
+- The game introduces an auction mechanism to determine trump.
+
+---
+
+2. PLAYERS AND PARTNERSHIPS
+
+---
+
+- Four players form two teams of two players each.
+- Partners sit across from one another.
+
+---
+
+3. CARDS AND RANK
+
+---
+
+- Uses a standard 52-card deck.
+- Card rank (high to low): A, K, Q, J, 10, 9, 8, 7, 6, 5, 4, 3, 2.
+- One suit is designated as trump. Trump cards outrank any card of a non-trump suit.
+
+---
+
+4. SETUP: WAGER AND NUMBER OF ROUNDS
+
+---
+
+- Before the game begins, the creator of the game selects:
+1. The total amount each of the four players must wager.
+2. The total number of rounds for the GAME: either 3 or 5.
+- All players agree to contribute their share of the wager.
+- The sum of all wagers goes into the pot. The winning team eventually splits this pot equally (after any commissions).
+
+---
+
+5. DEALING
+
+---
+
+Each GAME is composed of multiple ROUNDS (3 or 5, as selected).
+
+In each ROUND:
+1. The dealer deals 5 cards to each player first (in whatever standard dealing rotation you prefer, e.g., clockwise).
+1. An auction round determines the highest bidder, who picks trump.
+1. After trump is chosen, the dealer deals the remaining 8 cards to each player, completing a 13-card hand.
+1. Trick play commences.
+1. Tricks are counted, added to each team’s cumulative score, and the next ROUND begins with a new dealer (rotating who is dealt the first card, e.g., next player clockwise).
+
+1. 1. The dealer deals 5 cards to each player first (in whatever standard dealing rotation you prefer, e.g., clockwise).
+2. 1. An auction round determines the highest bidder, who picks trump.
+3. 1. After trump is chosen, the dealer deals the remaining 8 cards to each player, completing a 13-card hand.
+4. 1. Trick play commences.
+5. 1. Tricks are counted, added to each team’s cumulative score, and the next ROUND begins with a new dealer (rotating who is dealt the first card, e.g., next player clockwise).
+
+---
+
+6. ROTATION OF DEAL AND FIRST CARD
+
+---
+
+- The player who is dealt the first card in the 1st ROUND is chosen arbitrarily (or by standard rules).
+- In subsequent ROUNDS, the deal passes to the next player in a clockwise rotation.
+- This ensures different players get the first card each ROUND.
+
+---
+
+7. AUCTION (BIDDING)
+
+---
+
+After the initial 5-card deal (but before the remaining 8 cards are dealt):
+
+1. The first player to bid must bid at least 7 tricks or higher (up to 13).
+1. Each subsequent player, in turn order, may either:
+
+1. 1. The first player to bid must bid at least 7 tricks or higher (up to 13).
+2. 1. Each subsequent player, in turn order, may either:
+- Bid a higher number of tricks than the current highest bid (bidding 8 or more if 7 has been bid, etc.), OR
+- Pass (i.e., refuse to bid higher).
+    1. If all subsequent players pass after the first bid, then the first player’s bid stands.
+    2. The highest bidder at the end of this auction chooses the trump suit.
+
+Note on Bidding & Penalties:
+
+- Bids range from 7 to 13.
+- The bidder is effectively committing that their team will try to win at least that many tricks out of the 13 up for grabs.
+
+---
+
+8. SELECTION OF TRUMP
+
+---
+
+- The highest bidder immediately declares which suit (Hearts, Diamonds, Clubs, or Spades) is trump for that ROUND.
+- Then the dealer deals the remaining 8 cards to each player.
+
+---
+
+9. TRICK-TAKING (PLAY PHASE)
+
+---
+
+Once each player has 13 cards:
+
+1. The player leading the first trick (for the ROUND) is the player who made the first lead in the initial dealing sequence (or the winner of the previous trick, if you choose to carry over typical rule variations—but typically, the first lead can rotate each ROUND or remain consistent with the highest bidder, depending on local rules).
+1. Players must follow suit if able.
+1. If a player cannot follow suit, they may play any card—including a trump to try to win the trick.
+1. The highest card of the led suit wins the trick unless trump is played, in which case the highest trump wins the trick.
+1. The winner of the trick leads the next one.
+
+1. 1. The player leading the first trick (for the ROUND) is the player who made the first lead in the initial dealing sequence (or the winner of the previous trick, if you choose to carry over typical rule variations—but typically, the first lead can rotate each ROUND or remain consistent with the highest bidder, depending on local rules).
+2. 1. Players must follow suit if able.
+3. 1. If a player cannot follow suit, they may play any card—including a trump to try to win the trick.
+4. 1. The highest card of the led suit wins the trick unless trump is played, in which case the highest trump wins the trick.
+5. 1. The winner of the trick leads the next one.
+
+---
+
+10. SCORING DURING A SINGLE ROUND
+
+---
+
+- Each team counts the number of tricks they have won out of the 13 total.
+- The team of the highest bidder also checks whether they met or exceeded their bid.
+
+Penalty for Failing a Bid:
+
+- If a team’s highest bidder claimed *B* tricks, and they actually win *T* tricks, then if they fail to meet their bid (*T*<*B*), they incur a penalty of (*B*−*T*).
+    
+    B
+    
+    T
+    
+    T<B
+    
+    (B−T)
+    
+- The exact method of applying this penalty can vary. One typical approach is to subtract (*B*−*T*) from the number of tricks they actually scored for that ROUND’s total. In other words:
+    
+    (B−T)
+    
+
+Team Score for that ROUND = Tricks Won T*T* – (Shortfall (B−T)(*B*−*T*)) = T−(B−T)*T*−(*B*−*T*) = 2T−B2*T*−*B*.
+
+If the team meets or exceeds B*B*, then their score is simply T*T*.
+
+- The other team simply scores the number of tricks they achieve, with no penalty or bonus for this particular aspect unless they were the winning bidder.
+
+---
+
+11. ACCUMULATING SCORES ACROSS ROUNDS
+
+---
+
+- After each ROUND, add each team’s ROUND score to their cumulative total.
+- This continues for the selected number of ROUNDS (3 or 5).
+
+---
+
+12. DETERMINING THE WINNER AND PAYOUT
+
+---
+
+- At the end of the final ROUND (Round 3 or Round 5):
+1. Compare total scores.
+2. The team with the higher total score wins the pot.
+3. In the event of a tie, the pot is split equally between both teams, minus a 5% platform commission.
+- The winning team divides its share of the pot equally between its two players.
+
+---
+
+13. EXAMPLE WORKFLOW (HIGH-LEVEL)
+
+---
+
+1. Game Creator chooses:
+
+- Wager (e.g., \$10 per player)
+- Number of ROUNDS: e.g., 3
+
+1. ROUND 1:
+
+1. 1. ROUND 1:
+- Deal first 5 cards to each player.
+- Auction occurs. Suppose Player A bids 7, Players B and C pass, Player D bids 8, Player A passes later, so final highest bidder is Player D with a bid of 8.
+- Player D chooses Hearts as trump.
+- Dealer deals remaining 8 cards.
+- Play 13 tricks. Count each team’s trick total.
+- If Player D’s team got 9 tricks, they exceed their bid of 8. Score = 9. Opponents get 4.
+
+1. ROUND 2:
+
+1. 1. ROUND 2:
+- Deal rotates to Player B as the first card recipient.
+- Repeat the 5-card deal, auction, trump choice, and 8-card deal.
+- Play 13 tricks and add each team’s new total to their existing cumulative score.
+
+1. ROUND 3:
+
+1. 1. ROUND 3:
+- Deal rotates to Player C.
+- Repeat the process.
+- After 3 ROUNDS, see which team has the higher cumulative total.
+- That team wins the pot (minus any commission if they are tied, or 5% if the pot is always subject to a platform fee).
+
+---
+
+CONCLUSION
+
+---
+
+These rules encapsulate standard Court Piece gameplay with your custom tweaks:
+
+- Monetary wagers & multi-round structure
+- Auction to determine trump
+- Minimum bid of 7, maximum 13
+- Penalty for failing a bid
+- Rotating first-dealt player each ROUND
+- Ties result in shared payout minus commission
+
+If all of these details sound correct and complete, we can proceed to design or implement the game logic accordingly. If there’s any further clarification or adjustment needed, let me know!
+
+**Rangvaar Game Rules (Court Piece variant)**
+
+**Basic Structure:**
+
+- 4 players in 2 teams of 2 partners
+- Standard 52-card deck with Ace high
+- Game consists of 3 or 5 rounds (as chosen by creator)
+- Players wager an amount chosen by the game creator
+- Score based on tricks won
+
+**Game Flow:**
+
+1. **Initial Deal**:
+- Each player gets 5 cards
+- First card recipient rotates each round
+1. **Auction/Bidding**:
+- Starting from player who got first card
+- Minimum bid is 7 tricks
+- Each subsequent player must bid higher or pass
+- Highest bidder gets to choose trump suit
+1. **Trump and Deal Completion**:
+- Highest bidder selects trump suit
+- The remaining 8 cards are dealt to each player
+1. **Trick-Taking**:
+- First lead by player who received first card
+- Players must follow suit if able
+- Highest card of led suit wins unless trumped
+- Winner of trick leads next trick
+1. **Scoring**:
+- Teams count tricks won
+- If bidder's team fails to make their bid, penalty of (Bid - Tricks)
+- Team's score = Tricks Won - (Shortfall), or just Tricks Won if bid is met
+1. **Game Outcome**:
+- After 3/5 rounds, team with higher cumulative score wins
+- If tied, pot is split equally minus 5% platform commission
+- Winning team splits pot evenly between teammates

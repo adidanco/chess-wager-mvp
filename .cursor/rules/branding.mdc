@@ -1,0 +1,138 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# Your rule content
+
+- You can @ files here
+- You can use markdown but dont have to
+
+This document outlines the branding, messaging, etc. for our platform, need to adhere to this context when developing
+
+1. Brand Positioning & Personality
+
+1.1 Brand Positioning
+One-Stop Gaming Ecosystem
+The brand should exude a sense that “everything gaming” lives here: from skill-based wagers to tournaments, from social hangouts to AI-driven challenges.
+Position the platform as a single, unified environment where players can fully immerse themselves—rather than having to jump between scattered apps or sites.
+Inclusive Yet Cutting-Edge
+Combine the excitement of future-forward technology (e.g., eventually VR) with a welcoming, user-friendly tone.
+The brand says, “We’re advanced but we’ll make it accessible for you.”
+Skill-Driven & Trustworthy
+Real money wagers demand a level of trust and professionalism in the brand identity. Users need to feel the platform is secure, fair, and skill-oriented—free from shady connotations of gambling.
+Emphasize phrases like “Fair Play,” “Skill Matters,” and “Your Safe Gaming Haven.”
+1.2 Brand Personality
+Adventurous & Dynamic: Bold, energetic, celebrating risk-taking and skill competition.
+Community-Focused: Warm, friendly, inclusive—prioritizing social connectivity and a sense of belonging.
+Slightly Futuristic: Nods to “metaverse vibes” without being too sci-fi or intimidating.
+Reliable & Trustworthy: Clear disclaimers, minimal confusion, a calm confidence in the brand’s tone and visuals.
+Think of the brand voice as a friendly “pro gamer guide”: they’re knowledgeable, playful, a bit daring, and always supportive of the user’s journey.
+
+2. Brand Messaging Framework
+
+2.1 Core Messages
+“Play in Your World, Level Up in Ours”
+Communicates the sense that no matter your current favorite games or devices, you can bring your skill and ambitions here, and the platform expands them.
+“Where Skill Meets Thrill”
+Short tagline focusing on the synergy of skill-based competition and thrilling real-money wagers/contests.
+“The Gaming Verse That Connects Us All”
+A broader aspirational statement about a unified digital space: community, immersion, and innovation.
+2.2 Supporting Messages & Promises
+“Your Digital Playground”: A reassuring phrase to highlight ease, inclusivity, and fun factor.
+“Win Together. Grow Together”: Spotlights social features, team formation, and community tournaments.
+“Push Your Limits, Securely”: Conveys that risk-taking and wagers are fun but under a safe, fair system.
+2.3 Brand Voice & Tone
+Conversational Yet Knowledgeable: Like a pro player who’s showing a newcomer the ropes, but never condescending.
+Encouraging & Dynamic: Use action-oriented words (“Join Now!”, “Challenge Your Skills!”) but avoid yelling or overly spammy phrasing.
+Clarity & Brevity: In critical flows (e.g., placing bets, connecting wallets), the copy should be straightforward to instill trust and reduce friction.
+3. Visual Identity: Color Palettes, Typography, & Iconography
+
+Below is a more in-depth creative take on the platform’s style guide—something you can refine with actual user feedback and design exploration.
+
+3.1 Color Palettes
+Aim for a primary palette that’s futuristic, energetic, and has strong contrast. Then craft supporting/secondary colors for states, highlights, and backgrounds.
+
+Primary Palette
+Midnight Indigo (#1E1A3E): Deep, cosmic-like background color for immersive, modern interfaces.
+Vibrant Magenta (#EA38A4): Bold accent to highlight CTAs, interactive elements, or brand text.
+Electric Turquoise (#16F2EE): Secondary accent that can complement magenta or stand alone for key highlights (e.g., hover states, tokens).
+Secondary / Support Colors
+Graphite Gray (#2E2E36): For panels, footers, or behind content blocks. Ensures subtle layering.
+Neutral White (#F8F8FA): High contrast text or accent backgrounds (cards, modals).
+Soft Gradient: (e.g., Indigo → Turquoise) for dynamic backgrounds in hero sections or on hover effects, giving that “lively digital city” feel.
+Usage Logic
+Primary (Indigo + Magenta) for brand identity, main CTAs, key headings.
+Secondary (Turquoise + Grays) for backgrounds, secondary buttons, or highlighting different interactive states.
+Neutrals for text backgrounds, ensuring readability and layering.
+3.2 Typography
+Primary Font: “Space Grotesk” or “Poppins”
+Bold, Geometric Sans-Serif: modern, slightly futuristic.
+Weights:
+Bold (700/800) for large headlines or important announcements.
+Medium (500) for sub-headings or prominent text in panels.
+Regular (400) for body copy, paragraphs.
+Consistent letter spacing for clarity, especially on mobile.
+Secondary Font (Optional): “Roboto Mono” or another monospaced style.
+Could be used in small quantities for “stats,” “code-like” elements, or scoreboard readouts to evoke a gaming console vibe.
+Style Guidelines
+Keep headlines short and dynamic, often in Title Case or Sentence Case.
+Body text in a comfortable line-height (~1.4–1.6) for readability.
+Avoid overly condensed fonts—legibility is crucial, especially when small text might appear on mobile screens.
+3.3 Iconography & Graphic Elements
+Icon Style:
+Minimal, geometric icons with slight curves, consistent stroke weight. Could incorporate subtle neon glows or gradients for hover states or hero usage.
+Symbols for “Wager,” “Trophy,” “Chat,” “Team,” etc. should be intuitive and consistent.
+Supporting Graphics & Shapes:
+Abstract shapes, wave patterns, or subtle glitch effects can appear in hero banners or background sections to lend a sense of “digital motion.”
+Use minimal layering so the UI remains clean but dynamic.
+4. Layout & UI Component Guidelines
+
+4.1 Overall Layout Philosophy
+Deep Layering: Use overlapping panels or floating cards to convey dimension—like windows into a bigger digital space.
+Card-Based Sections: Summaries of events, matches, or social updates appear as “cards” with subtle shadows and consistent padding.
+Meaningful Empty Space: Let backgrounds breathe to show off brand colors or subtle animations. Avoid clutter for clarity.
+4.2 Specific Components
+Navigation Bars
+Keep the top or side nav minimal: brand logo, main sections (Play, Tournaments, Social, Profile).
+Use color blocks (#1E1A3E or #2E2E36) and highlight the active section with the Vibrant Magenta accent underlined or with a glow effect.
+Buttons & CTAs
+Primary CTA: Rounded corners, background in Vibrant Magenta (#EA38A4), crisp white text.
+Secondary Button: Indigo background with turquoise text or outlines.
+Hover / Press States: Subtle scale-up or glow, plus a small shift in color tone.
+Forms & Pop-ups
+Keep real-money flows (e.g., wallet, wagering) straightforward. White or near-white backgrounds, well-organized fields, large text.
+A slight “neon edge” effect on input focus (thin teal or magenta glow) can maintain the brand’s futuristic energy.
+Scoreboards / Stats Panels
+Possibly use a darker background (#2E2E36), with bold magenta or turquoise headings for each category.
+Subtle lines or grids give a “digital scoreboard” feel.
+Social Feed / Chat
+Conversational chat bubbles or boxes over a subdued background.
+Avatars in small circular frames, ringed in brand accent when a user is active or live streaming.
+5. Brand Collateral & Extensions
+
+Marketing / Promotional Materials
+Eye-catching hero images that combine gameplay screenshots or stylized avatars with brand colors and slogans like “Where Skill Meets Thrill.”
+Consistent use of brand fonts and color scheme across social posts, digital banners, or offline event posters.
+App Icons & Favicons
+Possibly a simplified emblem: a stylized letter or a shape that captures your brand’s futuristic vibe.
+Keep it simple enough to be recognizable in small sizes.
+Offline / Physical Tie-Ins (Future Growth)
+VR events or offline tournaments might incorporate the same color palette and tagline on signage or stage setups.
+Use interactive LED strips in brand accent colors to replicate the neon vibe from the digital environment.
+6. Putting It All Together
+
+Consistency Is Key
+Reuse the same brand colors, fonts, and shapes across every touchpoint.
+Maintain the brand voice: a friendly, daring guide that fosters community while offering a slick, professional interface.
+Modular, Scalable Design
+As new features roll out (VR expansions, e-commerce, more tournaments), the brand system must adapt easily.
+New event pages or mini-game overlays can still leverage existing color tokens, typography, and icon styles.
+Accessible & Legible
+High contrast text on dark backgrounds.
+Sufficient color contrast for visually impaired users.
+Clear, large tap targets for mobile.
+Inspire Users to Explore
+Subtle animations, micro-interactions, and a lively color palette evoke excitement.
+The brand identity should whisper, “You’ve entered an epic digital playground—stay and discover more.”

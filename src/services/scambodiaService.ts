@@ -18,6 +18,7 @@ import {
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../firebase';
 import { Timestamp } from 'firebase/firestore';
+import { auth } from '../firebase';
 
 // Constants
 export const MAX_PLAYERS = 4;
@@ -27,6 +28,32 @@ export const INITIAL_PEEK_COUNT = 2; // Bottom two cards
 
 // Define ActionType locally for use in drawCard (or import if globally defined)
 type ActionType = Action['type']; 
+
+// Define callable functions (add the new debug functions)
+const createGameFn = httpsCallable(functions, 'createScambodiaGame');
+const joinGameFn = httpsCallable(functions, 'joinScambodiaGame');
+const startGameFn = httpsCallable(functions, 'startScambodiaGame');
+const processScambodiaPayoutFn = httpsCallable(functions, 'processScambodiaPayout'); 
+const transitionScambodiaRoundFn = httpsCallable(functions, 'transitionScambodiaRound');
+// DEBUG FUNCTIONS
+const forceGameEndDebugFn = httpsCallable(functions, 'forceScambodiaGameEndDebug');
+const forceRoundEndDebugFn = httpsCallable(functions, 'forceScambodiaRoundEndDebug');
+const triggerScoreCalculationFn = httpsCallable(functions, 'triggerScoreCalculation');
+const forceScambodiaRoundScoreDebugFn = httpsCallable(functions, 'forceScambodiaRoundScoreDebug');
+
+// Define callable functions
+const initiatePowerFn = httpsCallable(functions, 'initiatePower');
+const resolvePowerTargetFn = httpsCallable(functions, 'resolvePowerTarget');
+const skipPowerFn = httpsCallable(functions, 'skipPower');
+
+/**
+ * Helper: returns the next player's userId in turn order.
+ */
+const getNextPlayerId = (players: PlayerInfo[], currentPlayerId: string): string => {
+  const idx = players.findIndex(p => p.userId === currentPlayerId);
+  if (idx === -1) return players[0].userId;
+  return players[(idx + 1) % players.length].userId;
+};
 
 /**
  * Creates a new deck of 52 cards for Scambodia.
@@ -40,29 +67,37 @@ export const createDeck = (): Card[] => {
 
   for (const suit of suits) {
     for (const rank of ranks) {
-      // Calculate value based on card rules
       let value = 0;
+      let isRedKing = false;
       
       if (rank === '1') {
-        value = 1; // Aces/1s are 1 in this implementation
+        value = 1;
       } else if (rank === 'J') {
         value = 11;
       } else if (rank === 'Q') {
         value = 12;
       } else if (rank === 'K') {
-        // Kings of Hearts and Diamonds are worth 0, others are 13
-        value = (suit === 'Hearts' || suit === 'Diamonds') ? 0 : 13;
+        // Red Kings start with value 13, but can become 0 later
+        isRedKing = (suit === 'Hearts' || suit === 'Diamonds');
+        value = 13; // All Kings start at 13
       } else {
-        // Number cards 2-10
         value = parseInt(rank);
       }
 
-      deck.push({
+      const card: Card = {
         suit,
         rank,
-        id: `${suit[0]}${rank}`, // e.g., "H7", "SA"
-        value
-      });
+        id: `${suit[0]}${rank}`,
+        value,
+        // Initialize flag for Red Kings, false otherwise
+        redKingZeroValueActive: isRedKing ? false : undefined 
+      };
+      // Remove undefined property if not a red king
+      if (card.redKingZeroValueActive === undefined) {
+        delete card.redKingZeroValueActive;
+      }
+      
+      deck.push(card);
     }
   }
 
@@ -300,8 +335,8 @@ const initializeRound = (players: PlayerInfo[], roundNumber: number): RoundState
     actions: [],
     scores: {},
     cardPowersUsed: [],
-    // Add field to track if initial peek is done for the round
-    initialPeekCompleted: false 
+    // Initialize playersCompletedPeek as an empty array
+    playersCompletedPeek: [] 
   };
   
   return roundState;
@@ -370,17 +405,41 @@ export const drawCard = async (
         type: actionType,
         playerId: userId,
         cardId: drawnCardId,
-        timestamp: serverTimestamp()
+        timestamp: Timestamp.now()
       };
 
-      transaction.update(gameDocRef, {
+      // Check if drawn from deck and is a power card
+      const isPowerCardFromDeck = (
+        source === 'deck' && 
+        cardToDraw && 
+        ['7', '8', '9', '10', 'J', 'Q', 'K'].includes(cardToDraw.rank)
+      );
+
+      // Prepare base update data
+      const updateData: Record<string, any> = {
         [`rounds.${currentRound}.drawPile`]: updatedDrawPile,
         [`rounds.${currentRound}.discardPile`]: updatedDiscardPile,
         [`rounds.${currentRound}.drawnCard`]: cardToDraw,
         [`rounds.${currentRound}.drawnCardUserId`]: userId,
+        [`rounds.${currentRound}.drawnCardSource`]: source,
         [`rounds.${currentRound}.actions`]: arrayUnion(action),
+        [`rounds.${currentRound}.pendingPowerDecision`]: null,
+        [`rounds.${currentRound}.activePowerResolution`]: null,
         updatedAt: serverTimestamp()
-      });
+      };
+
+      // If it's a power card from the deck, set pendingPowerDecision
+      if (isPowerCardFromDeck) {
+        logger.info('drawCard', 'Power card drawn from deck, setting pending decision', { gameId, userId, cardId: cardToDraw.id });
+        updateData[`rounds.${currentRound}.pendingPowerDecision`] = { card: cardToDraw };
+        // DO NOT advance turn yet, player must choose to redeem or ignore
+      } else {
+         // If not a power card from deck, turn potentially ends depending on action taken later
+         // No turn advancement happens *here* in drawCard anymore.
+         // Turn advancement is handled by the action chosen *after* drawing.
+      }
+
+      transaction.update(gameDocRef, updateData);
     });
     
     // Use the separately stored ID for logging
@@ -434,8 +493,17 @@ export const exchangeCard = async (
       }
       
       // Get the drawn card
-      const drawnCard = roundState.drawnCard;
+      const drawnCard = { ...roundState.drawnCard }; // Clone to modify
+      const drawnCardSource = roundState.drawnCardSource;
       
+      // Check for Red King Power Activation
+      const isRedKing = drawnCard.rank === 'K' && (drawnCard.suit === 'Hearts' || drawnCard.suit === 'Diamonds');
+      if (isRedKing && drawnCardSource === 'deck') {
+          // Activate the zero value power flag if drawn from deck and exchanged
+          drawnCard.redKingZeroValueActive = true;
+          logger.info('exchangeCard', 'Red King zero value power activated', { gameId, userId, cardId: drawnCard.id });
+      }
+
       // Get player's cards
       const playerCards = roundState.playerCards[userId];
       if (!playerCards) {
@@ -456,33 +524,31 @@ export const exchangeCard = async (
       // Add the replaced card to the discard pile
       const updatedDiscardPile = [...roundState.discardPile, replacedCard];
       
-      // Add to visible cards so player knows what it is
-      const updatedVisibleToPlayer = { ...roundState.visibleToPlayer };
-      if (!updatedVisibleToPlayer[userId]) {
-        updatedVisibleToPlayer[userId] = [];
-      }
-      if (!updatedVisibleToPlayer[userId].includes(cardPosition)) {
-        updatedVisibleToPlayer[userId] = [...updatedVisibleToPlayer[userId], cardPosition];
-      }
-      
+      // Clear pending power decision if it exists
+      const pendingPower = roundState.pendingPowerDecision;
+
       // Update game state
-      transaction.update(gameDocRef, {
+      const updateData: Record<string, any> = {
         [`rounds.${currentRound}.playerCards.${userId}`]: updatedPlayerCards,
         [`rounds.${currentRound}.discardPile`]: updatedDiscardPile,
-        [`rounds.${currentRound}.visibleToPlayer`]: updatedVisibleToPlayer,
         [`rounds.${currentRound}.drawnCard`]: null,
         [`rounds.${currentRound}.drawnCardUserId`]: null,
+        [`rounds.${currentRound}.drawnCardSource`]: null,
         [`rounds.${currentRound}.actions`]: arrayUnion({
           type: 'Exchange',
           playerId: userId,
           cardId: drawnCard.id,
           cardPosition,
-          timestamp: serverTimestamp()
+          timestamp: Timestamp.now()
         }),
-        // Move to next player's turn
         [`rounds.${currentRound}.currentTurnPlayerId`]: getNextPlayerId(gameState.players, userId),
         updatedAt: serverTimestamp()
-      });
+      };
+      // If a power decision was pending, clear it as it was ignored
+      if (pendingPower) {
+        updateData[`rounds.${currentRound}.pendingPowerDecision`] = null;
+      }
+      transaction.update(gameDocRef, updateData);
     });
     
     logger.info('exchangeCard', 'Card exchanged successfully', { 
@@ -497,14 +563,61 @@ export const exchangeCard = async (
 };
 
 /**
- * Gets the ID of the next player in turn order
+ * Ignores a pending power decision by discarding the drawn card and advancing turn.
+ * This is only valid when a power card was drawn from the deck and the player chooses not to redeem it.
  */
-const getNextPlayerId = (players: PlayerInfo[], currentPlayerId: string): string => {
-  const currentPlayerIndex = players.findIndex(p => p.userId === currentPlayerId);
-  if (currentPlayerIndex === -1) return players[0].userId;
-  
-  const nextPlayerIndex = (currentPlayerIndex + 1) % players.length;
-  return players[nextPlayerIndex].userId;
+export const ignorePendingPower = async (
+  gameId: string,
+  userId: string
+): Promise<void> => {
+  logger.info('ignorePendingPower', 'Player ignoring pending power', { gameId, userId });
+
+  const gameDocRef = doc(db, 'scambodiaGames', gameId);
+
+  try {
+    await runTransaction(db, async (transaction) => {
+      const gameDoc = await transaction.get(gameDocRef);
+      if (!gameDoc.exists()) throw new Error('Game not found.');
+
+      const gameState = gameDoc.data() as ScambodiaGameState;
+      const currentRound = gameState.currentRoundNumber;
+      const roundState = gameState.rounds[currentRound];
+
+      // Validation
+      if (gameState.status !== 'Playing') throw new Error('Game is not in playing state.');
+      if (roundState.currentTurnPlayerId !== userId) throw new Error('Not your turn.');
+      if (!roundState.pendingPowerDecision) throw new Error('No pending power to ignore.');
+      if (!roundState.drawnCard || roundState.drawnCardUserId !== userId) throw new Error('No drawn card to discard.');
+
+      const discardedCard = roundState.drawnCard;
+      const updatedDiscardPile = [...roundState.discardPile, discardedCard];
+
+      const nextPlayerId = getNextPlayerId(gameState.players, userId);
+
+      const updateData: Record<string, any> = {
+        [`rounds.${currentRound}.discardPile`]: updatedDiscardPile,
+        [`rounds.${currentRound}.pendingPowerDecision`]: null,
+        [`rounds.${currentRound}.drawnCard`]: null,
+        [`rounds.${currentRound}.drawnCardUserId`]: null,
+        [`rounds.${currentRound}.drawnCardSource`]: null,
+        [`rounds.${currentRound}.actions`]: arrayUnion({
+          type: 'IgnorePower',
+          playerId: userId,
+          cardId: discardedCard.id,
+          timestamp: Timestamp.now(),
+        }),
+        [`rounds.${currentRound}.currentTurnPlayerId`]: nextPlayerId,
+        updatedAt: serverTimestamp(),
+      };
+
+      transaction.update(gameDocRef, updateData);
+    });
+
+    logger.info('ignorePendingPower', 'Pending power ignored successfully', { gameId, userId });
+  } catch (error) {
+    logger.error('ignorePendingPower', 'Failed to ignore power', { error, gameId, userId });
+    throw error;
+  }
 };
 
 /**
@@ -554,21 +667,34 @@ export const discardDrawnCard = async (
       // Add card to discard pile
       const updatedDiscardPile = [...roundState.discardPile, discardedCard];
       
-      // Update game state
-      transaction.update(gameDocRef, {
+      // Clear pending power decision if it exists
+      const pendingPower = roundState.pendingPowerDecision;
+      
+      // Prepare the data to update in Firestore
+      const updateData: Record<string, any> = {
         [`rounds.${currentRound}.discardPile`]: updatedDiscardPile,
         [`rounds.${currentRound}.drawnCard`]: null,
         [`rounds.${currentRound}.drawnCardUserId`]: null,
+        [`rounds.${currentRound}.drawnCardSource`]: null,
         [`rounds.${currentRound}.actions`]: arrayUnion({
           type: 'Discard',
           playerId: userId,
           cardId: discardedCard.id,
-          timestamp: serverTimestamp()
+          timestamp: Timestamp.now()
         }),
-        // Move to next player's turn
-        [`rounds.${currentRound}.currentTurnPlayerId`]: getNextPlayerId(gameState.players, userId),
         updatedAt: serverTimestamp()
-      });
+      };
+
+      // Always advance the turn after discarding (unless power flow was chosen earlier)
+      updateData[`rounds.${currentRound}.currentTurnPlayerId`] = getNextPlayerId(gameState.players, userId);
+
+      // If a power decision was pending, clear it as it was ignored
+      if (pendingPower) {
+        updateData[`rounds.${currentRound}.pendingPowerDecision`] = null;
+      }
+      
+      // Update game state
+      transaction.update(gameDocRef, updateData);
     });
     
     logger.info('discardDrawnCard', 'Card discarded successfully', { 
@@ -585,17 +711,18 @@ export const discardDrawnCard = async (
 };
 
 /**
- * Attempts to match a drawn card with a face-down card for discard
+ * Attempts to match a player's card with the top card of the discard pile.
+ * This action can only be taken at the start of the turn, BEFORE drawing.
  * @param gameId The ID of the game
  * @param userId The ID of the user attempting match
- * @param cardPosition The position of the card to match (0-3)
+ * @param cardPosition The position of the player's card to match (0-3)
  */
 export const attemptMatch = async (
   gameId: string,
   userId: string,
   cardPosition: CardPosition
 ): Promise<boolean> => {
-  logger.info('attemptMatch', 'Player attempting card match', { gameId, userId, cardPosition });
+  logger.info('attemptMatch', 'Player attempting discard pile match', { gameId, userId, cardPosition });
   
   const gameDocRef = doc(db, 'scambodiaGames', gameId);
   
@@ -603,118 +730,86 @@ export const attemptMatch = async (
     let matchSuccess = false;
     
     await runTransaction(db, async (transaction) => {
-      // Read the current game state
       const gameDoc = await transaction.get(gameDocRef);
-      if (!gameDoc.exists()) {
-        throw new Error('Game not found.');
-      }
+      if (!gameDoc.exists()) throw new Error('Game not found.');
       
       const gameState = gameDoc.data() as ScambodiaGameState;
       const currentRound = gameState.currentRoundNumber;
       const roundState = gameState.rounds[currentRound];
       
       // Validation checks
-      if (gameState.status !== 'Playing') {
-        throw new Error('Game is not in playing state.');
-      }
-      
-      if (roundState.currentTurnPlayerId !== userId) {
-        throw new Error('Not your turn to attempt a match.');
-      }
-      
-      // Verify player has a drawn card
-      if (!roundState.drawnCard || roundState.drawnCardUserId !== userId) {
-        throw new Error('You must draw a card before attempting a match.');
-      }
-      
-      // Get the drawn card
-      const drawnCard = roundState.drawnCard;
+      if (gameState.status !== 'Playing') throw new Error('Game is not in playing state.');
+      if (roundState.currentTurnPlayerId !== userId) throw new Error('Not your turn to attempt a match.');
+      if (roundState.drawnCard !== null) throw new Error('Cannot attempt match after drawing a card.'); // Crucial check
+      if (roundState.discardPile.length === 0) throw new Error('Discard pile is empty, cannot attempt match.');
+
+      const topDiscardCard = roundState.discardPile[roundState.discardPile.length - 1];
       
       // Get player's cards
       const playerCards = roundState.playerCards[userId];
-      if (!playerCards) {
-        throw new Error('Player cards not found.');
-      }
+      if (!playerCards) throw new Error('Player cards not found.');
       
-      // Get the card to match
-      const cardToMatch = playerCards[cardPosition];
-      if (!cardToMatch) {
-        throw new Error('No card at that position to match.');
-      }
+      // Get the card to match from player's hand
+      const playerCardToMatch = playerCards[cardPosition];
+      if (!playerCardToMatch) throw new Error('No card at that position to match.');
       
       // Check if the cards match (same rank)
-      matchSuccess = drawnCard.rank === cardToMatch.rank;
+      matchSuccess = topDiscardCard.rank === playerCardToMatch.rank;
+      
+      const actionBase = {
+        playerId: userId,
+        cardPosition,
+        discardCardId: topDiscardCard.id, 
+        playerCardId: playerCardToMatch.id,
+        success: matchSuccess,
+        timestamp: Timestamp.now()
+      };
       
       if (matchSuccess) {
-        // Remove the matched card from player's hand
         const updatedPlayerCards = [...playerCards];
-        updatedPlayerCards[cardPosition] = null; // Mark as discarded
+        updatedPlayerCards[cardPosition] = null; // Mark player's card as discarded
         
-        // Add both cards to discard pile
-        const updatedDiscardPile = [...roundState.discardPile, drawnCard, cardToMatch];
-        
-        // Update game state
+        // Keep existing discard pile and add the matched player card as the new top
+        const updatedDiscardPile = [...roundState.discardPile, playerCardToMatch];
+
+        const updateData: Record<string, any> = {
+          [`rounds.${currentRound}.playerCards.${userId}`]: updatedPlayerCards,
+          [`rounds.${currentRound}.discardPile`]: updatedDiscardPile,
+          [`rounds.${currentRound}.actions`]: arrayUnion({ ...actionBase, type: 'MatchSuccess' }),
+          updatedAt: serverTimestamp()
+        };
+
+        // Check win condition (all cards null)
+        const hasWon = updatedPlayerCards.every(card => card === null);
+        if (hasWon) {
+          logger.info('attemptMatch', 'Player discarded all cards via match - triggering Scoring', { gameId, userId });
+          updateData[`rounds.${currentRound}.phase`] = 'Scoring';
+        } else {
+          // Advance turn if match succeeded but didn't win
+          updateData[`rounds.${currentRound}.currentTurnPlayerId`] = getNextPlayerId(gameState.players, userId);
+        }
+        transaction.update(gameDocRef, updateData);
+
+      } else {
+        // Match failed - swap player's selected card with top of discard pile and end turn
+        const updatedPlayerCards = [...playerCards];
+        updatedPlayerCards[cardPosition] = topDiscardCard; // Player now gets the discard card
+
+        // Replace the top of discard pile with the player's card
+        const updatedDiscardPile = [...roundState.discardPile];
+        updatedDiscardPile[updatedDiscardPile.length - 1] = playerCardToMatch;
+
         transaction.update(gameDocRef, {
           [`rounds.${currentRound}.playerCards.${userId}`]: updatedPlayerCards,
           [`rounds.${currentRound}.discardPile`]: updatedDiscardPile,
-          [`rounds.${currentRound}.drawnCard`]: null,
-          [`rounds.${currentRound}.drawnCardUserId`]: null,
-          [`rounds.${currentRound}.actions`]: arrayUnion({
-            type: 'Match',
-            playerId: userId,
-            cardId: drawnCard.id,
-            cardPosition,
-            success: true, // Explicitly log success
-            timestamp: serverTimestamp()
-          }),
-          // ADVANCE TURN even on successful match (common rule variation)
-          [`rounds.${currentRound}.currentTurnPlayerId`]: getNextPlayerId(gameState.players, userId),
-          updatedAt: serverTimestamp()
-        });
-        
-        // Check if player has discarded all cards (win condition)
-        const hasWon = updatedPlayerCards.every(card => card === null);
-        if (hasWon) {
-          // Update round state to mark as won
-          // Note: This update might overwrite the turn change if not careful,
-          // but since phase changes, it should be okay. We'll update timestamp again.
-          logger.info('attemptMatch', 'Player discarded all cards via match - Round Over', { gameId, userId });
-          transaction.update(gameDocRef, {
-            [`rounds.${currentRound}.phase`]: 'Scoring', // Or 'RoundEnded'?
-            [`rounds.${currentRound}.roundWinnerId`]: userId,
-            updatedAt: serverTimestamp()
-          });
-        }
-      } else {
-        // Match failed, just add the drawn card to discard
-        const updatedDiscardPile = [...roundState.discardPile, drawnCard];
-        
-        // Update game state
-        transaction.update(gameDocRef, {
-          [`rounds.${currentRound}.discardPile`]: updatedDiscardPile,
-          [`rounds.${currentRound}.drawnCard`]: null,
-          [`rounds.${currentRound}.drawnCardUserId`]: null,
-          [`rounds.${currentRound}.actions`]: arrayUnion({
-            type: 'Match',
-            playerId: userId,
-            cardId: drawnCard.id,
-            cardPosition,
-            success: false, // Explicitly log failure
-            timestamp: serverTimestamp()
-          }),
+          [`rounds.${currentRound}.actions`]: arrayUnion({ ...actionBase, type: 'MatchFailSwap' }),
           [`rounds.${currentRound}.currentTurnPlayerId`]: getNextPlayerId(gameState.players, userId),
           updatedAt: serverTimestamp()
         });
       }
     });
     
-    logger.info('attemptMatch', 'Match attempt completed', { 
-      gameId, 
-      userId, 
-      cardPosition,
-      matchSuccess
-    });
-    
+    logger.info('attemptMatch', 'Match attempt completed', { gameId, userId, cardPosition, matchSuccess });
     return matchSuccess;
   } catch (error) {
     logger.error('attemptMatch', 'Failed to attempt match', { error, gameId, userId, cardPosition });
@@ -752,7 +847,7 @@ export const declareScambodia = async (
       const action = {
         type: 'DeclareScambodia' as const,
         playerId: userId,
-        timestamp: serverTimestamp()
+        timestamp: Timestamp.now()
       };
 
       // Update game state
@@ -816,7 +911,7 @@ export const usePower = async (
         type: powerType,
         playerId: userId,
         ...params, // Include any additional parameters
-        timestamp: serverTimestamp() as any
+        timestamp: Timestamp.now()
       };
       
       // Handle specific power logic
@@ -1101,20 +1196,73 @@ export const scoreRound = async (gameId: string): Promise<void> => {
   }
 };
 
-export const completeInitialPeek = async (gameId: string, roundNumber: number): Promise<void> => {
-  logger.info('completeInitialPeek', 'Completing initial peek phase', { gameId, roundNumber });
+/**
+ * Marks a player as having completed the initial peek phase.
+ * Transitions the game to the 'Playing' phase if all players have completed their peek.
+ * @param gameId The ID of the game.
+ * @param userId The ID of the player completing the peek.
+ * @param roundNumber The current round number.
+ */
+export const completeInitialPeek = async (
+  gameId: string,
+  userId: string,
+  roundNumber: number
+): Promise<void> => {
+  logger.info('completeInitialPeek', 'Player completing initial peek', { gameId, userId, roundNumber });
   const gameDocRef = doc(db, 'scambodiaGames', gameId);
 
   try {
-    await updateDoc(gameDocRef, {
-      [`rounds.${roundNumber}.phase`]: 'Playing',
-      [`rounds.${roundNumber}.initialPeekCompleted`]: true,
-      updatedAt: serverTimestamp()
+    await runTransaction(db, async (transaction) => {
+      const gameDoc = await transaction.get(gameDocRef);
+      if (!gameDoc.exists()) {
+        throw new Error('Game not found.');
+      }
+      const gameState = gameDoc.data() as ScambodiaGameState;
+
+      // Validate round number
+      if (!gameState.rounds || !gameState.rounds[roundNumber]) {
+        throw new Error(`Round ${roundNumber} not found in game state.`);
+      }
+      const roundState = gameState.rounds[roundNumber];
+
+      // Check if player has already completed peek or if phase is wrong
+      if (roundState.phase !== 'Setup') {
+        logger.warn('completeInitialPeek', 'Attempted to complete peek outside of Setup phase', { gameId, userId, currentPhase: roundState.phase });
+        return; // Not an error, just ignore if phase isn't Setup
+      }
+      if (roundState.playersCompletedPeek.includes(userId)) {
+         logger.warn('completeInitialPeek', 'Player already completed peek', { gameId, userId });
+         return; // Ignore if player already marked as complete
+      }
+
+      // Add player to the completed list
+      const updateData: Record<string, any> = {
+        [`rounds.${roundNumber}.playersCompletedPeek`]: arrayUnion(userId),
+        updatedAt: serverTimestamp()
+      };
+
+      // Check if all players have now completed
+      // Need to account for the player being added in this transaction
+      const totalPlayers = gameState.players.length;
+      const playersCompletedAfterUpdate = roundState.playersCompletedPeek.length + 1;
+
+      if (playersCompletedAfterUpdate >= totalPlayers) {
+        logger.info('completeInitialPeek', 'All players completed peek, transitioning to Playing phase', { gameId, roundNumber, totalPlayers });
+        updateData[`rounds.${roundNumber}.phase`] = 'Playing';
+        // Ensure the first player is set as the current turn player
+        updateData[`rounds.${roundNumber}.currentTurnPlayerId`] = gameState.players[0].userId;
+      } else {
+         logger.info('completeInitialPeek', 'Player completed peek, waiting for others', { gameId, roundNumber, completed: playersCompletedAfterUpdate, total: totalPlayers });
+      }
+
+      // Perform the update
+      transaction.update(gameDocRef, updateData);
     });
-    logger.info('completeInitialPeek', 'Initial peek phase completed successfully', { gameId, roundNumber });
+
+    logger.info('completeInitialPeek', 'Initial peek completion processed successfully', { gameId, userId, roundNumber });
   } catch (error) {
-     logger.error('completeInitialPeek', 'Failed to complete initial peek phase', { error, gameId, roundNumber });
-    throw error;
+    logger.error('completeInitialPeek', 'Failed to complete initial peek', { error, gameId, userId, roundNumber });
+    throw error; // Re-throw to be handled by the caller
   }
 };
 
@@ -1134,28 +1282,222 @@ export const endTurn = async (
       const roundState = gameState.rounds[currentRound];
 
       // Validation
-      if (gameState.status !== 'Playing') throw new Error('Game is not in playing state.');
-      if (roundState.currentTurnPlayerId !== userId) throw new Error('Not your turn to end.');
-      // Optional check for drawn card needing action removed for simplicity
+      if (gameState.status !== 'Playing' && roundState.phase !== 'FinalTurn') {
+         // Allow ending turn during 'Playing' OR 'FinalTurn' phases
+        throw new Error('Game is not in a state where turn can be ended.'); 
+      }
+      if (roundState.currentTurnPlayerId !== userId) {
+        throw new Error('Not your turn to end.');
+      }
       
       const nextPlayerId = getNextPlayerId(gameState.players, userId);
       const action: PlayerAction = {
         type: 'EndTurn',
         playerId: userId,
-        timestamp: serverTimestamp() as Timestamp
+        timestamp: Timestamp.now()
       };
       
       const updateData: Record<string, any> = {
-        [`rounds.${currentRound}.currentTurnPlayerId`]: nextPlayerId,
         [`rounds.${currentRound}.actions`]: arrayUnion(action),
         updatedAt: serverTimestamp()
       };
+
+      // Check if we are in the FinalTurn phase
+      if (roundState.phase === 'FinalTurn') {
+        // Check if the next player is the one who declared Scambodia
+        if (nextPlayerId === roundState.playerDeclaredScambodia) {
+          // Final turn loop is complete, move to Scoring phase
+          logger.info('endTurn', 'FinalTurn loop complete, moving to Scoring', { gameId, roundNumber: currentRound });
+          updateData[`rounds.${currentRound}.phase`] = 'Scoring';
+          // Do NOT update currentTurnPlayerId, phase change handles flow
+        } else {
+          // Final turn loop continues, advance to next player
+          updateData[`rounds.${currentRound}.currentTurnPlayerId`] = nextPlayerId;
+        }
+      } else {
+        // Normal turn end during 'Playing' phase
+        updateData[`rounds.${currentRound}.currentTurnPlayerId`] = nextPlayerId;
+      }
 
       transaction.update(gameDocRef, updateData);
     });
     logger.info('endTurn', 'Turn ended successfully', { gameId, userId });
   } catch (error) {
     logger.error('endTurn', 'Failed to end turn', { error, gameId, userId });
+    throw error;
+  }
+};
+
+/**
+ * Triggers the cloud function to calculate scores for a completed round.
+ * @param gameId The ID of the game.
+ * @param roundNumber The round number that just finished.
+ */
+export const triggerScoreCalculation = async (gameId: string, roundNumber: number): Promise<void> => {
+  logger.info('triggerScoreCalculation (Client)', 'Requesting score calculation', { gameId, roundNumber });
+  try {
+    const result = await triggerScoreCalculationFn({ gameId, roundNumber });
+    logger.info('triggerScoreCalculation (Client)', 'Score calculation triggered successfully', { gameId, roundNumber, result });
+  } catch (error) {
+    logger.error('triggerScoreCalculation (Client)', 'Error triggering score calculation', { error, gameId, roundNumber });
+    throw error; // Re-throw for UI handling
+  }
+};
+
+/**
+ * Triggers the cloud function to transition the round or end the game.
+ * @param gameId The ID of the game.
+ * @param currentRoundNumber The round number that just completed.
+ */
+export const transitionScambodiaRound = async (data: { gameId: string, currentRoundNumber: number }): Promise<void> => {
+  logger.info('transitionScambodiaRound (Client)', 'Requesting round transition', { data });
+  try {
+    await transitionScambodiaRoundFn(data);
+    logger.info('transitionScambodiaRound (Client)', 'Round transition triggered successfully', { data });
+  } catch (error) {
+    logger.error('transitionScambodiaRound (Client)', 'Error triggering round transition', { error, data });
+    throw error; 
+  }
+};
+
+/**
+ * [DEBUG ONLY] Forces the game to end with a specific winner.
+ * @param gameId The ID of the game.
+ * @param winningPlayerId The ID of the player to declare as winner.
+ */
+export const forceGameEndDebug = async (gameId: string, winningPlayerId: string): Promise<void> => {
+  // Add component name as first arg
+  logger.warn('forceGameEndDebug', '[DEBUG] Calling forceScambodiaGameEndDebug', { gameId, winningPlayerId });
+  try {
+    await forceGameEndDebugFn({ gameId, winningPlayerId });
+    // Add component name as first arg
+    logger.warn('forceGameEndDebug', '[DEBUG] forceScambodiaGameEndDebug called successfully.', { gameId });
+  } catch (error) {
+    // Add component name as first arg
+    logger.error('forceGameEndDebug', '[DEBUG] Error calling forceScambodiaGameEndDebug', { error: error, gameId: gameId });
+    throw error; // Re-throw to be caught by action handler
+  }
+};
+
+/**
+ * [DEBUG ONLY] Forces the current round to end, declaring a winner and moving to scoring.
+ * @param gameId The ID of the game.
+ * @param winningPlayerId The ID of the player to declare as round winner.
+ * @param roundNumber The current round number.
+ */
+export const forceRoundEndDebug = async (
+  gameId: string,
+  winningPlayerId: string,
+  roundNumber: number
+): Promise<void> => {
+  // Add component name as first arg
+  logger.warn('forceRoundEndDebug', '[DEBUG] Calling forceScambodiaRoundEndDebug', { gameId, winningPlayerId, roundNumber });
+  try {
+    await forceRoundEndDebugFn({ gameId, winningPlayerId, roundNumber });
+    // Add component name as first arg
+    logger.warn('forceRoundEndDebug', '[DEBUG] forceScambodiaRoundEndDebug called successfully.', { gameId, roundNumber });
+  } catch (error) {
+    // Add component name as first arg
+    logger.error('forceRoundEndDebug', '[DEBUG] Error calling forceScambodiaRoundEndDebug', { error: error, gameId: gameId, roundNumber: roundNumber });
+    throw error; // Re-throw to be caught by action handler
+  }
+};
+
+/**
+ * [DEBUG ONLY] Forces the round to the scoring phase with dummy scores and a winner.
+ */
+export const forceScoreRoundDebug = async (
+  gameId: string,
+  winningPlayerId: string,
+  roundNumber: number
+): Promise<void> => {
+  logger.warn('forceScoreRoundDebug (Client)', 'Requesting force round score', { gameId, winningPlayerId, roundNumber });
+  try {
+    await forceScambodiaRoundScoreDebugFn({ gameId, winningPlayerId, roundNumber });
+    logger.warn('forceScoreRoundDebug (Client)', 'Force round score triggered successfully', { gameId, roundNumber });
+  } catch (error) {
+    logger.error('forceScoreRoundDebug (Client)', 'Error triggering force round score', { error, gameId, roundNumber });
+    throw error;
+  }
+};
+
+/**
+ * Initiates the power card redemption flow.
+ */
+export const initiatePower = async (gameId: string, powerType: CardPowerType): Promise<void> => {
+  const context = { gameId, powerType }; // For logging
+  logger.info('initiatePower (Client)', 'Requesting power initiation', context);
+  try {
+    const user = auth.currentUser;
+    logger.debug('initiatePower (Client)', 'User check 1', { uid: user?.uid, ...context });
+    if (!user) {
+      throw new Error('User must be authenticated to initiate power.');
+    }
+    logger.debug('initiatePower (Client)', 'Forcing token refresh...', { uid: user.uid, ...context });
+    await user.getIdToken(true); // Force refresh the token
+    logger.debug('initiatePower (Client)', 'Token refreshed. User check 2', { uid: auth.currentUser?.uid, ...context });
+    if (!auth.currentUser) { // Double check after await
+       throw new Error('User became unauthenticated during token refresh.');
+    }
+    logger.debug('initiatePower (Client)', 'Calling initiatePowerFn...', { uid: auth.currentUser.uid, ...context });
+    await initiatePowerFn({ gameId, powerType });
+    logger.info('initiatePower (Client)', 'Power initiated successfully', context);
+  } catch (error) {
+    logger.error('initiatePower (Client)', 'Error initiating power', { error, ...context });
+    throw error;
+  }
+};
+
+/**
+ * Sends the selected target(s) to resolve the power effect.
+ */
+export const resolvePowerTarget = async (gameId: string, targetData: any): Promise<void> => {
+  const context = { gameId, targetData };
+  logger.info('resolvePowerTarget (Client)', 'Sending power targets', context);
+  try {
+    const user = auth.currentUser;
+    logger.debug('resolvePowerTarget (Client)', 'User check 1', { uid: user?.uid, ...context });
+    if (!user) {
+      throw new Error('User must be authenticated to resolve power target.');
+    }
+    logger.debug('resolvePowerTarget (Client)', 'Forcing token refresh...', { uid: user.uid, ...context });
+    await user.getIdToken(true); // Force refresh the token
+    logger.debug('resolvePowerTarget (Client)', 'Token refreshed. User check 2', { uid: auth.currentUser?.uid, ...context });
+     if (!auth.currentUser) { // Double check after await
+       throw new Error('User became unauthenticated during token refresh.');
+    }
+    logger.debug('resolvePowerTarget (Client)', 'Calling resolvePowerTargetFn...', { uid: auth.currentUser.uid, ...context });
+    await resolvePowerTargetFn({ gameId, targetData });
+    logger.info('resolvePowerTarget (Client)', 'Power target resolution triggered successfully', { gameId });
+  } catch (error) {
+    logger.error('resolvePowerTarget (Client)', 'Error resolving power target', { error, ...context });
+    throw error;
+  }
+};
+
+/**
+ * Skips the currently pending power card.
+ */
+export const skipPower = async (gameId: string): Promise<void> => {
+  const context = { gameId };
+  logger.info('skipPower (Client)', 'Requesting to skip power', context);
+  try {
+    const user = auth.currentUser;
+    logger.debug('skipPower (Client)', 'User check 1', { uid: user?.uid, ...context });
+    if (!user) {
+      throw new Error('User must be authenticated to skip power.');
+    }
+    logger.debug('skipPower (Client)', 'Forcing token refresh...', { uid: user.uid, ...context });
+    await user.getIdToken(true); // Force refresh the token
+    logger.debug('skipPower (Client)', 'Token refreshed. User check 2', { uid: auth.currentUser?.uid, ...context });
+     if (!auth.currentUser) { // Double check after await
+       throw new Error('User became unauthenticated during token refresh.');
+    }
+     logger.debug('skipPower (Client)', 'Calling skipPowerFn...', { uid: auth.currentUser.uid, ...context });
+    await skipPowerFn({ gameId });
+    logger.info('skipPower (Client)', 'Skip power triggered successfully', context);
+  } catch (error) {
+    logger.error('skipPower (Client)', 'Error skipping power', { error, ...context });
     throw error;
   }
 };

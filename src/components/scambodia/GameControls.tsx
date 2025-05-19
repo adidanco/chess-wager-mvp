@@ -16,9 +16,11 @@ interface GameControlsProps {
   onAttemptMatch: () => void;
   onDeclareScambodia: () => void;
   onInitialPeek?: () => void;
+  onIgnorePower?: () => void;
   canDeclareScambodia: boolean;
   disabled: boolean;
   isInitialPeekPhase?: boolean;
+  onRedeemPower?: () => void;
 }
 
 /**
@@ -39,9 +41,11 @@ const GameControls: React.FC<GameControlsProps> = ({
   onAttemptMatch,
   onDeclareScambodia,
   onInitialPeek,
+  onIgnorePower,
   canDeclareScambodia,
   disabled,
-  isInitialPeekPhase
+  isInitialPeekPhase,
+  onRedeemPower
 }) => {
   // Setup phase (not yet playing)
   if (currentPhase === 'Setup') {
@@ -76,12 +80,29 @@ const GameControls: React.FC<GameControlsProps> = ({
     );
   }
 
-  // Show draw/declare actions if it IS the playing phase and card NOT drawn yet
-  if (currentPhase === 'Playing' && !hasDrawnCard) {
+  // --- Determine Current Action Set based on props --- 
+  // Check explicitly if onRedeemPower function is provided to determine if power decision is pending
+  const isPowerDecisionPending = typeof onRedeemPower === 'function';
+
+  let actionSet: 'Draw/Declare' | 'Redeem/Ignore' | 'StandardActions' | 'Waiting' = 'Waiting';
+  if (isMyTurn) {
+    if (!hasDrawnCard) {
+      actionSet = 'Draw/Declare';
+    } else if (isPowerDecisionPending) { // Use the explicit check
+      actionSet = 'Redeem/Ignore';
+    } else {
+      actionSet = 'StandardActions';
+    }
+  }
+
+  // --- Render based on Action Set --- 
+
+  // Render Draw / Declare Scambodia / Attempt Match Buttons
+  if (actionSet === 'Draw/Declare') {
     return (
       <div className="flex flex-wrap justify-center items-center gap-3">
         <Button 
-          variant="primary" 
+          variant="cta" 
           onClick={onDrawFromDeck} 
           disabled={disabled || isSubmitting}
           loading={isSubmitting}
@@ -98,6 +119,15 @@ const GameControls: React.FC<GameControlsProps> = ({
         >
           Draw from Discard
         </Button>
+        <Button 
+          variant="secondary" 
+          onClick={onAttemptMatch} 
+          disabled={selectedCardPosition === null || disabled || isSubmitting} 
+          loading={isSubmitting}
+          className="flex-grow sm:flex-grow-0"
+        >
+          Attempt Match {selectedCardPosition !== null ? `(#${selectedCardPosition + 1})` : ''}
+        </Button>
         {canDeclareScambodia && (
           <Button 
             variant="warning" 
@@ -113,15 +143,66 @@ const GameControls: React.FC<GameControlsProps> = ({
     );
   }
 
-  // Show post-draw actions if card HAS been drawn (Playing or FinalTurn phase)
-  if (hasDrawnCard) {
+  // Render Redeem Power / Ignore Action Buttons
+  if (actionSet === 'Redeem/Ignore') {
+    return (
+      <div className="flex flex-wrap justify-center items-center gap-3">
+        {/* Only show Redeem Power button if the handler exists */}
+        {onRedeemPower && (
+          <Button 
+            variant="primary" 
+            onClick={onRedeemPower}
+            disabled={disabled || isSubmitting}
+            loading={isSubmitting}
+            className="flex-grow sm:flex-grow-0"
+          >
+            Redeem Power
+          </Button>
+        )}
+        {/* Explicit Ignore Power */}
+        {onIgnorePower && (
+          <Button
+            variant="danger"
+            onClick={onIgnorePower}
+            disabled={disabled || isSubmitting}
+            loading={isSubmitting}
+            className="flex-grow sm:flex-grow-0"
+          >
+            Ignore Power
+          </Button>
+        )}
+        <Button 
+          variant="secondary" 
+          onClick={onExchangeCard} 
+          disabled={(!hasDrawnCard) || selectedCardPosition === null || disabled || isSubmitting}
+          loading={isSubmitting}
+          className="flex-grow sm:flex-grow-0"
+          title="Choose this to ignore the power"
+        >
+          Exchange Card {selectedCardPosition !== null ? `(#${selectedCardPosition + 1})` : ''} (Ignore Power)
+        </Button>
+        <Button 
+          variant="secondary" 
+          onClick={onDiscardDrawnCard} 
+          disabled={!hasDrawnCard || disabled || isSubmitting}
+          loading={isSubmitting}
+          className="flex-grow sm:flex-grow-0"
+          title="Choose this to ignore the power"
+        >
+          Discard Drawn (Ignore Power)
+        </Button>
+      </div>
+    );
+  }
+
+  // Render Standard Action Buttons (Exchange, Discard, Match)
+  if (actionSet === 'StandardActions') {
     return (
       <div className="flex flex-wrap justify-center items-center gap-3">
         <Button 
           variant="primary" 
           onClick={onExchangeCard} 
-          // Disable if no card is selected in hand
-          disabled={selectedCardPosition === null || disabled || isSubmitting}
+          disabled={(!hasDrawnCard) || selectedCardPosition === null || disabled || isSubmitting}
           loading={isSubmitting}
           className="flex-grow sm:flex-grow-0"
         >
@@ -130,28 +211,17 @@ const GameControls: React.FC<GameControlsProps> = ({
         <Button 
           variant="secondary" 
           onClick={onDiscardDrawnCard} 
-          // Can always discard the drawn card
-          disabled={disabled || isSubmitting}
+          disabled={!hasDrawnCard || disabled || isSubmitting}
           loading={isSubmitting}
           className="flex-grow sm:flex-grow-0"
         >
           Discard Drawn
         </Button>
-        <Button 
-          variant="secondary" 
-          onClick={onAttemptMatch} 
-          // Disable if no card selected, or if drawn from discard (match only vs deck draw? Check rules)
-          disabled={selectedCardPosition === null || disabled || isSubmitting || drawnFromDiscard} 
-          loading={isSubmitting}
-          className="flex-grow sm:flex-grow-0"
-        >
-          Attempt Match {selectedCardPosition !== null ? `(#${selectedCardPosition + 1})` : ''}
-        </Button>
       </div>
     );
   }
 
-  // Fallback for unexpected states
+  // Fallback / Waiting 
   return (
      <div className="text-center p-3">
         <p className="text-gray-500 italic">Waiting for action...</p>

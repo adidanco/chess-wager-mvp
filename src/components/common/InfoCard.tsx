@@ -8,6 +8,7 @@ interface InfoCardProps {
   actionText?: string;
   onClick?: () => void;
   className?: string;
+  ['data-cy']?: string;
 }
 
 /**
@@ -21,7 +22,8 @@ const InfoCard: React.FC<InfoCardProps> = ({
   iconBgColor = 'bg-soft-pink',
   actionText = 'Learn More',
   onClick,
-  className = ''
+  className = '',
+  ['data-cy']: dataCy
 }) => {
   return (
     <div className={`bg-white/15 backdrop-blur-sm rounded-lg p-5 transform transition-all hover:scale-102 hover:bg-white/20 hover:shadow-lg ${className}`}>
@@ -29,6 +31,7 @@ const InfoCard: React.FC<InfoCardProps> = ({
         onClick={onClick}
         className="w-full text-left focus:outline-none"
         disabled={!onClick}
+        data-cy={dataCy}
       >
         <div className="flex items-center mb-4">
           <div className={`${iconBgColor} text-white p-3 rounded-full shadow-md`}>

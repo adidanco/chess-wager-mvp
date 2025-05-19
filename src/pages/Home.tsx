@@ -161,7 +161,11 @@ export default function Home(): JSX.Element {
 
   return (
     <PageLayout>
-      <div className="container mx-auto px-4 max-w-md">
+      <div data-cy="home-main" className="container mx-auto px-4 max-w-md">
+        {/* Logout button for E2E and user convenience */}
+        <div className="flex justify-end mb-2">
+          <button data-cy="logout-btn" onClick={handleLogout} className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600">Logout</button>
+        </div>
         {/* Email verification banner */}
         {!emailVerified && (
           <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6 rounded-md">
@@ -290,6 +294,11 @@ export default function Home(): JSX.Element {
             onLogout={handleLogout}
           />
         </Card>
+
+        <div className="flex flex-col gap-4 mt-8">
+          <button data-cy="home-choose-game-btn" onClick={handleChooseGame} className="bg-blue-600 text-white px-4 py-2 rounded">Choose Game</button>
+          <button data-cy="join-game-btn" onClick={handleJoinGame} className="bg-green-600 text-white px-4 py-2 rounded">Join Game</button>
+        </div>
       </div>
     </PageLayout>
   )

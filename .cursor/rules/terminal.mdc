@@ -1,0 +1,12 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# Your rule content
+
+- You can @ files here
+- You can use markdown but dont have to
+
+1. Always check which directory you are running commands from or which is the current directory before asking to me run terminal commands, check current state of terminal before you perform actions in it basically.

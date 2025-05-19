@@ -42,9 +42,13 @@ export default function ScambodiaGame(): JSX.Element {
     discardDrawnCard: discardDrawnCardAction,
     attemptMatch: attemptMatchAction,
     declareScambodia: declareScambodiaAction,
-    usePower: usePowerAction,
-    endTurn: endTurnAction,
+    initiatePower,
+    resolvePowerTarget,
+    skipPower,
+    ignorePendingPower,
     logGameState,
+    forceGameEnd,
+    forceScoreRound,
   } = useScambodiaGame(gameId);
 
   // Local state for game interactions
@@ -65,10 +69,38 @@ export default function ScambodiaGame(): JSX.Element {
   const [isInitialPeekPhase, setIsInitialPeekPhase] = useState(false);
   const [peekCountdown, setPeekCountdown] = useState(INITIAL_PEEK_DURATION);
 
+  // State for temporary power peeking - Updated Structure
+  const [peekedCardInfo, setPeekedCardInfo] = useState<{ 
+    card: Card, 
+    targetPosition: CardPosition, 
+    targetPlayerId: string, 
+    peekerId: string 
+  } | null>(null);
+  const [isPeekingActive, setIsPeekingActive] = useState(false);
+
+  // Handler to clear power target selections
+  const handleCancelSelection = (): void => {
+    setPowerTarget_OwnCardIndex(null);
+    setPowerTarget_OpponentId(null);
+    setPowerTarget_OpponentCardIndex(null);
+    toast('Target selection cleared.');
+  };
+
+  // Effect to clear peeked card info when peek timer ends
+  useEffect(() => {
+    if (!isPeekingActive) {
+      setPeekedCardInfo(null);
+    }
+  }, [isPeekingActive]);
+
   // Memoized values for game state
   const currentRound = useMemo(() => gameState?.rounds[gameState.currentRoundNumber], [gameState]) as RoundState | undefined;
   const isMyTurn = useMemo(() => !!currentPlayerId && currentRound?.currentTurnPlayerId === currentPlayerId, [currentRound, currentPlayerId]);
   const currentPhase = useMemo(() => currentRound?.phase, [currentRound]);
+  const pendingPower = useMemo(() => currentRound?.pendingPowerDecision, [currentRound]);
+  const activePower = useMemo(() => currentRound?.activePowerResolution, [currentRound]);
+  const hasDrawnCardState = useMemo(() => !!currentRound?.drawnCard, [currentRound]);
+  const drawnCardSource = useMemo(() => currentRound?.drawnCardSource, [currentRound]); // Get source from state
 
   // Network status detection
   useEffect(() => {
@@ -87,18 +119,12 @@ export default function ScambodiaGame(): JSX.Element {
     };
   }, []);
 
-  // Effect to handle drawn card state change
-  useEffect(() => {
-    setHasDrawnCard(!!drawnCard);
-    if (drawnCard) {
-      setSelectedCardPosition(null); 
-    }
-  }, [drawnCard]);
-
   // Handler for initiating the initial peek
   const handleInitialPeek = useCallback(() => {
-    if (!currentRound || currentRound.phase !== 'Setup' || currentRound.initialPeekCompleted) {
-      return toast.error("Cannot start peek phase at this time.");
+    // Check if the round exists and is in the Setup phase
+    if (!currentRound || currentRound.phase !== 'Setup') {
+      toast.error("Cannot start peek phase at this time.");
+      return;
     }
     
     setIsInitialPeekPhase(true);
@@ -119,16 +145,15 @@ export default function ScambodiaGame(): JSX.Element {
     setTimeout(async () => {
       setIsInitialPeekPhase(false);
       
-      // Only complete the peek phase if we're the first player
-      if (gameState && currentPlayerId && 
-          gameState.players[0].userId === currentPlayerId && 
-          gameId && gameState.currentRoundNumber) {
+      // Any player whose timer runs out should signal they've completed the peek
+      if (gameState && currentPlayerId && gameId && gameState.currentRoundNumber) {
         try {
-          await completeInitialPeek(gameId, gameState.currentRoundNumber);
-          toast.success('Peek phase complete! Game starting.');
+          // Pass the current player's ID
+          await completeInitialPeek(gameId, currentPlayerId, gameState.currentRoundNumber);
+          toast.success('Peek phase complete!'); // General message, backend decides if game starts
         } catch (error) {
-          logger.error('ScambodiaGame', 'Failed to complete peek phase', { error });
-          toast.error('Error ending peek phase.');
+          logger.error('ScambodiaGame', 'Failed to signal peek completion', { error });
+          toast.error('Error completing peek phase.');
         }
       }
     }, INITIAL_PEEK_DURATION * 1000);
@@ -142,8 +167,11 @@ export default function ScambodiaGame(): JSX.Element {
     setIsSubmittingAction(true);
     try {
       await actionFn();
-      if (!showSpecialPower) {
+      if (!activePower) {
         setSelectedCardPosition(null);
+        setPowerTarget_OwnCardIndex(null);
+        setPowerTarget_OpponentId(null);
+        setPowerTarget_OpponentCardIndex(null);
       }
     } catch (err: any) {
       logger.error('ScambodiaGame', 'Action failed', { error: err });
@@ -151,65 +179,97 @@ export default function ScambodiaGame(): JSX.Element {
     } finally {
       setIsSubmittingAction(false);
     }
-  }, [isSubmittingAction, showSpecialPower]);
+  }, [isSubmittingAction, activePower]);
 
   // Card handlers
   const handleCardClick = (position: CardPosition, playerId?: string) => {
     if (isInitialPeekPhase) return;
-    if (showSpecialPower && specialCard) {
-      const powerType = determinePowerType(specialCard);
-      if (playerId) { 
-        if (powerType === 'Peek_Opponent' || powerType === 'Blind_Swap' || powerType === 'Seen_Swap') {
-          setPowerTarget_OpponentId(playerId);
-          setPowerTarget_OpponentCardIndex(position);
-          toast(`Selected opponent ${gameState?.players.find(p => p.userId === playerId)?.username}'s card ${position + 1} for ${powerType}. Confirm in modal.`);
+    
+    // If actively resolving a power, handle target selection
+    if (activePower && activePower.step === 'SelectingTarget') {
+      const powerType = activePower.type;
+      const currentPlayerId = currentUser?.uid; // Ensure we have current user ID
+      
+      if (!currentPlayerId) return; // Should not happen if playing
+
+      // Logic similar to before, but updates local state for targets
+      if (playerId && playerId !== currentPlayerId) { // Click on Opponent
+          if (powerType === 'Peek_Opponent' || powerType === 'Blind_Swap' || powerType === 'Seen_Swap') { // Blind_Swap needs opponent target
+            if (powerTarget_OpponentId !== playerId) {
+              setPowerTarget_OpponentId(playerId);
+              setPowerTarget_OpponentCardIndex(null); // Reset card for new opponent
+              toast.success(`Selected opponent - now choose their card.`);
+            } else {
+              // We have selected the opponent, now select their card
+              setPowerTarget_OpponentCardIndex(position);
+              // Updated toast: Check if own card is selected before prompting confirmation
+              toast.success(`Selected opponent's card ${position + 1}. ${powerTarget_OwnCardIndex !== null ? 'Confirm power.' : 'Now select your card.'}`); 
+            }
+          }
+        } else { // Click on Own Hand
+          if (powerType === 'Peek_Own' || powerType === 'Blind_Swap' || powerType === 'Seen_Swap') { // Blind_Swap needs own target
+            setPowerTarget_OwnCardIndex(position);
+            // Updated toast: Check if opponent card is selected before prompting confirmation for swap powers
+            const opponentTargetSelected = powerTarget_OpponentId && powerTarget_OpponentCardIndex !== null;
+            toast.success(`Selected your card ${position + 1}. ${powerType === 'Peek_Own' ? 'Confirm power.' : (opponentTargetSelected ? 'Confirm power.' : 'Now select opponent\'s card.')}`);
+          }
         }
-      } else { 
-        if (powerType === 'Peek_Own' || powerType === 'Blind_Swap' || powerType === 'Seen_Swap') {
-          setPowerTarget_OwnCardIndex(position);
-          toast(`Selected your card ${position + 1} for ${powerType}. Confirm in modal.`);
+    } else if (isMyTurn && hasDrawnCardState) {
+        // If already drawn, allow selecting own card for Exchange (including ignore power)
+        if (!playerId) { 
+           setSelectedCardPosition(position === selectedCardPosition ? null : position);
         }
-      }
-      return; 
-    }
-    if (isMyTurn && hasDrawnCard) {
-      setSelectedCardPosition(position === selectedCardPosition ? null : position);
+    } else if (isMyTurn && !hasDrawnCardState) {
+       // If NOT drawn yet, allow selecting own card for Attempt Match
+        if (!playerId) {
+            setSelectedCardPosition(position === selectedCardPosition ? null : position);
+        }
     }
   };
 
   // Game action handlers
   const handleDrawFromDeck = async () => {
-    if (isInitialPeekPhase) return toast.error("Cannot draw during peek phase.");
+    if (isInitialPeekPhase) {
+      toast.error("Cannot draw during peek phase.");
+      return;
+    }
     await handleAction(() => drawCardAction('deck'));
   };
 
   const handleDrawFromDiscard = async () => {
-    if (isInitialPeekPhase) return toast.error("Cannot draw from discard during peek phase.");
+    if (isInitialPeekPhase) {
+      toast.error("Cannot draw from discard during peek phase.");
+      return;
+    }
     await handleAction(() => drawCardAction('discard'));
   };
 
   const handleExchangeCard = async () => {
-    if (isInitialPeekPhase) return toast.error("Cannot exchange during peek phase.");
+    if (isInitialPeekPhase) {
+      toast.error("Cannot exchange during peek phase.");
+      return;
+    }
     if (selectedCardPosition === null) return toast.error('Select a card in your hand to exchange.');
     await handleAction(() => exchangeCardAction(selectedCardPosition));
   };
 
   const handleDiscardDrawnCard = async () => {
-    if (isInitialPeekPhase) return toast.error("Cannot discard during peek phase.");
-    await handleAction(async () => {
-      const discarded = await discardDrawnCardAction();
-      
-      // Check if the discarded card has a special power
-      if (discarded && ['J', 'Q', 'K'].includes(discarded.rank)) {
-        setSpecialCard(discarded);
-        setShowSpecialPower(true);
-      }
-    });
+    if (isInitialPeekPhase) {
+      toast.error("Cannot discard during peek phase.");
+      return;
+    }
+    await handleAction(() => discardDrawnCardAction());
   };
 
   const handleAttemptMatch = async () => {
-    if (isInitialPeekPhase) return toast.error("Cannot attempt match during peek phase.");
-    if (selectedCardPosition === null) return toast.error('Select a card in your hand to attempt a match.');
+    if (isInitialPeekPhase) {
+      toast.error("Cannot attempt match during peek phase.");
+      return;
+    }
+    if (selectedCardPosition === null) {
+      toast.error('Select a card in your hand to attempt a match.');
+      return;
+    }
     await handleAction(async () => {
       const succeeded = await attemptMatchAction(selectedCardPosition);
       if (succeeded !== null) {
@@ -219,79 +279,113 @@ export default function ScambodiaGame(): JSX.Element {
   };
 
   const handleDeclareScambodia = async () => {
-    if (isInitialPeekPhase) return toast.error("Cannot declare Scambodia during peek phase.");
+    if (isInitialPeekPhase) {
+      toast.error("Cannot declare Scambodia during peek phase.");
+      return;
+    }
     await handleAction(async () => {
       await declareScambodiaAction();
       toast.success('SCAMBODIA declared! Other players get one more turn.');
     });
   };
 
-  const handleUseSpecialPower = async () => {
-    if (isInitialPeekPhase) return;
+  const handleRedeemPower = async () => {
+    if (!pendingPower || !pendingPower.card) {
+      toast.error("No pending power to redeem.");
+      return;
+    }
+    const powerType = determinePowerType(pendingPower.card);
+    if (!powerType) {
+      toast.error("Invalid card for power.");
+      return;
+    }
+    await handleAction(() => initiatePower(powerType));
+  };
+
+  const handleConfirmUsePower = async () => {
+    if (!activePower || activePower.step !== 'SelectingTarget') {
+      toast.error("No power to use.");
+      return;
+    }
+    
+    const powerType = activePower.type;
+    let targetData: any = {};
+    let peekTargetPlayerId: string | null = null; // Whose card is being peeked
+    let peekTargetPosition: CardPosition | null = null; // Which position is being peeked
+
+    try {
+      switch (powerType) {
+        case 'Peek_Own': 
+          if (powerTarget_OwnCardIndex === null) throw new Error('Select own card.');
+          if (!currentPlayerId) throw new Error('Current player ID is undefined.');
+          targetData = { cardIndex: powerTarget_OwnCardIndex }; 
+          peekTargetPlayerId = currentPlayerId; // Target is self
+          peekTargetPosition = powerTarget_OwnCardIndex;
+          break;
+        case 'Peek_Opponent': 
+          if (powerTarget_OpponentId === null || powerTarget_OpponentCardIndex === null) throw new Error('Select opponent card.');
+          targetData = { targetPlayerId: powerTarget_OpponentId, cardIndex: powerTarget_OpponentCardIndex }; 
+          peekTargetPlayerId = powerTarget_OpponentId; // Target is opponent
+          peekTargetPosition = powerTarget_OpponentCardIndex;
+          break;
+        case 'Blind_Swap': case 'Seen_Swap': 
+          if (powerTarget_OwnCardIndex === null || powerTarget_OpponentId === null || powerTarget_OpponentCardIndex === null) throw new Error('Select own and opponent card.');
+          targetData = { cardIndex: powerTarget_OwnCardIndex, targetPlayerId: powerTarget_OpponentId, targetCardIndex: powerTarget_OpponentCardIndex }; 
+          break;
+        default: throw new Error('Invalid power type');
+      }
+    } catch (e: any) {
+      toast.error(`Target Selection Error: ${e.message}`);
+      return;
+    }
+    
     await handleAction(async () => {
-      if (specialCard) {
-        const powerType = determinePowerType(specialCard)!;
-        let finalParams: any = {};
-        switch (powerType) {
-          case 'Peek_Own': finalParams = { cardIndex: powerTarget_OwnCardIndex }; break;
-          case 'Peek_Opponent': finalParams = { targetPlayerId: powerTarget_OpponentId, cardIndex: powerTarget_OpponentCardIndex }; break;
-          case 'Blind_Swap': case 'Seen_Swap': finalParams = { cardIndex: powerTarget_OwnCardIndex, targetPlayerId: powerTarget_OpponentId, targetCardIndex: powerTarget_OpponentCardIndex }; break;
-        }
-        if ((powerType === 'Peek_Own' && finalParams.cardIndex === null) || (powerType === 'Peek_Opponent' && (finalParams.targetPlayerId === null || finalParams.cardIndex === null)) || ((powerType === 'Blind_Swap' || powerType === 'Seen_Swap') && (finalParams.cardIndex === null || finalParams.targetPlayerId === null || finalParams.targetCardIndex === null))) {
-          throw new Error('Missing target selection for the power.');
-        }
-        await usePowerAction(powerType, finalParams);
-        toast.success(`Used ${specialCard.rank} special power!`);
-        setShowSpecialPower(false);
-        setSpecialCard(null);
-        setPowerTarget_OwnCardIndex(null);
-        setPowerTarget_OpponentId(null);
-        setPowerTarget_OpponentCardIndex(null);
-        await endTurnAction();
-      } else {
-        logger.warn('ScambodiaGame', 'handleUseSpecialPower called without specialCard state');
-        toast.error('Action failed: No special card context.');
-        setShowSpecialPower(false);
-        setSpecialCard(null);
-        setPowerTarget_OwnCardIndex(null);
-        setPowerTarget_OpponentId(null);
-        setPowerTarget_OpponentCardIndex(null);
+      await resolvePowerTarget(targetData);
+      
+      // Initiate client-side peek if applicable
+      if ((powerType === 'Peek_Own' || powerType === 'Peek_Opponent') && peekTargetPlayerId && peekTargetPosition !== null && currentRound && currentPlayerId) {
+         const peekedCard = currentRound.playerCards?.[peekTargetPlayerId]?.[peekTargetPosition];
+         if (peekedCard) {
+           logger.info('handleConfirmUsePower', 'Initiating client-side peek', { peekTargetPlayerId, peekTargetPosition, card: peekedCard, peekerId: currentPlayerId });
+           // Set state with new structure
+           setPeekedCardInfo({ 
+             card: peekedCard, 
+             targetPosition: peekTargetPosition, 
+             targetPlayerId: peekTargetPlayerId, 
+             peekerId: currentPlayerId // Store who initiated the peek
+           });
+           setIsPeekingActive(true);
+           setTimeout(() => { setIsPeekingActive(false); }, 5000); 
+         } else {
+            logger.warn('handleConfirmUsePower', 'Could not find card data for peek', { peekTargetPlayerId, peekTargetPosition });
+         }
       }
     });
   };
 
-  const handleSkipSpecialPower = async () => {
-    if (isInitialPeekPhase) return;
-    setShowSpecialPower(false);
-    setSpecialCard(null);
-    setPowerTarget_OwnCardIndex(null);
-    setPowerTarget_OpponentId(null);
-    setPowerTarget_OpponentCardIndex(null);
-    try {
-      setIsSubmittingAction(true);
-      await endTurnAction();
-      toast('Special power skipped.');
-    } catch(err: any) {
-       logger.error('ScambodiaGame', 'Failed to end turn after skip', { error: err });
-       toast.error(err.message || 'Failed to end turn.');
-    } finally {
-       setIsSubmittingAction(false);
+  // Power action helpers
+  const handleSkipPower = async () => {
+    if (!pendingPower && !activePower) {
+      toast.error("No power to skip.");
+      return;
     }
+    await handleAction(() => skipPower());
   };
 
-  // Handler to clear power target selections
-  const handleCancelSelection = () => {
-    setPowerTarget_OwnCardIndex(null);
-    setPowerTarget_OpponentId(null);
-    setPowerTarget_OpponentCardIndex(null);
-    toast('Target selection cleared.');
+  const handleIgnorePower = async () => {
+    if (!pendingPower) {
+      toast.error('No power to ignore.');
+      return;
+    }
+    await handleAction(() => ignorePendingPower());
+    setSelectedCardPosition(null);
   };
 
   // Update the prop passed to GameBoard
   const powerTargetSelectionForBoard = useMemo(() => {
-    if (!showSpecialPower || !specialCard) return undefined;
+    if (!activePower || !activePower.card) return undefined;
 
-    const powerType = determinePowerType(specialCard);
+    const powerType = determinePowerType(activePower.card);
 
     switch (powerType) {
       case 'Peek_Own':
@@ -322,19 +416,20 @@ export default function ScambodiaGame(): JSX.Element {
         break;
     }
     return undefined; // No targeting active
-  }, [showSpecialPower, specialCard, powerTarget_OwnCardIndex, powerTarget_OpponentId, powerTarget_OpponentCardIndex]);
+  }, [activePower, powerTarget_OwnCardIndex, powerTarget_OpponentId, powerTarget_OpponentCardIndex]);
 
   // Logic to determine visible cards for the player during peek phase
   const visibleCardsForPlayer = useMemo(() => {
     if (!currentRound || !currentPlayerId) return [];
     
-    // Only show cards during initial peek if peek phase is active
-    if (currentRound.phase === 'Setup' && !currentRound.initialPeekCompleted) {
+    // Check if the round is in Setup phase
+    if (currentRound.phase === 'Setup') {
+      // Rely on the local isInitialPeekPhase state to show cards during the countdown
       if (isInitialPeekPhase) {
         // Only show bottom two cards (2, 3) during initial peek
         return [2, 3] as CardPosition[];
       } else {
-        // No cards visible before the peek button is clicked
+        // No cards visible before the peek button is clicked or after timeout
         return [] as CardPosition[];
       }
     }
@@ -342,6 +437,21 @@ export default function ScambodiaGame(): JSX.Element {
     // Normal visibility from game state (filtering for own card positions)
     return (currentRound.visibleToPlayer[currentPlayerId] || []).filter((p): p is CardPosition => typeof p === 'number');
   }, [currentRound, currentPlayerId, isInitialPeekPhase]);
+
+  // Validate round state
+  if (!currentRound) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p>Error: Round state missing.</p>
+      </div>
+    );
+  }
+
+  // Determine if player can declare Scambodia
+  const canDeclareScambodia = isMyTurn && !hasDrawnCardState && !currentRound.playerDeclaredScambodia && currentPhase === 'Playing';
+
+  // Determine precisely when cards can be selected for primary actions (Match/Exchange)
+  const canSelectCardForAction = isMyTurn && !activePower && !pendingPower;
 
   // Loading state
   if (loading) {
@@ -412,36 +522,11 @@ export default function ScambodiaGame(): JSX.Element {
     );
   }
   
-  // Validate round state
-  if (!currentRound) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p>Error: Round state missing.</p>
-      </div>
-    );
-  }
-
-  // Determine if player can declare Scambodia
-  const canDeclareScambodia = isMyTurn && !hasDrawnCard && !currentRound.playerDeclaredScambodia && currentPhase === 'Playing';
-
   // Main game UI with our new components
   return (
     <div className="flex flex-col h-screen bg-gray-50">
-      {/* Debug controls (development only) */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className="absolute top-1 right-1 z-50 bg-red-100 border border-red-300 p-2 rounded shadow-lg text-xs space-y-1">
-          <p className="font-bold text-red-700 text-center">DEBUG</p>
-          <button 
-            onClick={() => logGameState()} 
-            className="w-full bg-yellow-500 hover:bg-yellow-600 text-white px-2 py-1 rounded text-xs"
-          >
-            Log State
-          </button>
-        </div>
-      )}
-
       {/* Game Status Header */}
-      <div className="p-2 bg-white border-b border-gray-300 shadow-sm z-10">
+      <div data-cy="scambodia-game-status" className="p-2 bg-white border-b border-gray-300 shadow-sm z-10">
         <GameStatus
           gameState={gameState}
           currentUserId={currentPlayerId || ''}
@@ -453,53 +538,140 @@ export default function ScambodiaGame(): JSX.Element {
       </div>
 
       {/* Game Board with Player's Hand and Opponents */}
-      <div className="flex-grow overflow-auto bg-soft-lavender/20 p-4">
+      <div data-cy="scambodia-board" className="flex-grow overflow-auto bg-soft-lavender/20 p-4">
         <GameBoard
           gameState={gameState}
           currentUserId={currentPlayerId || ''}
           selectedCardPosition={selectedCardPosition}
           onCardClick={handleCardClick}
-          canSelectCard={isMyTurn && hasDrawnCard && !isInitialPeekPhase}
-          drawnCard={drawnCard}
+          canSelectCard={canSelectCardForAction}
           powerTargetSelection={powerTargetSelectionForBoard}
           visibleCardPositions={visibleCardsForPlayer}
+          peekedCardInfo={peekedCardInfo}
+          isPeekingActive={isPeekingActive}
         />
       </div>
 
       {/* Game Controls Footer */}
-      <div className="p-2 bg-white border-t border-gray-300">
-        <GameControls
-          isMyTurn={isMyTurn}
-          currentPhase={currentPhase || 'Setup'}
-          selectedCardPosition={selectedCardPosition}
-          hasDrawnCard={hasDrawnCard}
-          drawnFromDiscard={drawnFromDiscard}
-          isSubmitting={isSubmittingAction}
-          onDrawFromDeck={handleDrawFromDeck}
-          onDrawFromDiscard={handleDrawFromDiscard}
-          onExchangeCard={handleExchangeCard}
-          onDiscardDrawnCard={handleDiscardDrawnCard}
-          onAttemptMatch={handleAttemptMatch}
-          onDeclareScambodia={handleDeclareScambodia}
-          canDeclareScambodia={canDeclareScambodia}
-          disabled={!isMyTurn || isSubmittingAction}
-          onInitialPeek={handleInitialPeek}
-          isInitialPeekPhase={isInitialPeekPhase}
-        />
+      <div data-cy="scambodia-controls" className="p-2 bg-white border-t border-gray-300">
+         {/* Conditionally render controls based on game state */}
+         
+         {/* State: Setup Phase - Show Peek Button */}
+         {currentPhase === 'Setup' && !isInitialPeekPhase && (
+             <GameControls
+                isMyTurn={true} // Assume controls are relevant during setup
+                currentPhase={currentPhase}
+                onInitialPeek={handleInitialPeek} // Pass the peek handler
+                isInitialPeekPhase={false}
+                // Provide defaults/empty handlers for other props to satisfy type
+                selectedCardPosition={null}
+                hasDrawnCard={false}
+                drawnFromDiscard={false}
+                isSubmitting={isSubmittingAction}
+                onDrawFromDeck={() => {}}
+                onDrawFromDiscard={() => {}}
+                onExchangeCard={() => {}}
+                onDiscardDrawnCard={() => {}}
+                onAttemptMatch={() => {}}
+                onDeclareScambodia={() => {}}
+                canDeclareScambodia={false}
+                disabled={isSubmittingAction}
+             />
+         )}
+         {/* Display message during peek countdown */}
+         {currentPhase === 'Setup' && isInitialPeekPhase && (
+             <div className="flex justify-center">
+                <div className="px-4 py-2 bg-green-100 text-green-800 rounded-lg">
+                    Peeking at bottom cards... ({peekCountdown}s)
+                </div>
+             </div>
+         )}
+         
+         {/* State: Waiting to Draw (Playing Phase) */}
+         {currentPhase !== 'Setup' && isMyTurn && !hasDrawnCardState && !pendingPower && !activePower && (
+             <GameControls 
+                isMyTurn={true}
+                hasDrawnCard={false}
+                onDrawFromDeck={handleDrawFromDeck}
+                onDrawFromDiscard={handleDrawFromDiscard}
+                onDeclareScambodia={handleDeclareScambodia}
+                canDeclareScambodia={canDeclareScambodia}
+                isSubmitting={isSubmittingAction}
+                disabled={isSubmittingAction}
+                currentPhase={currentPhase || ''}
+                selectedCardPosition={selectedCardPosition}
+                onAttemptMatch={handleAttemptMatch}
+                drawnFromDiscard={false}
+                onRedeemPower={() => {}}
+                onExchangeCard={() => {}}
+                onDiscardDrawnCard={() => {}}
+             />
+         )}
+         
+         {/* State: Pending Power Decision (Drew 7-K from Deck) */}
+         {currentPhase !== 'Setup' && isMyTurn && hasDrawnCardState && pendingPower && pendingPower.card && (
+             <GameControls 
+                 isMyTurn={true}
+                 hasDrawnCard={true}
+                 onRedeemPower={handleRedeemPower}
+                 onExchangeCard={handleExchangeCard}
+                 onDiscardDrawnCard={handleDiscardDrawnCard}
+                 onAttemptMatch={handleAttemptMatch}
+                 currentPhase={currentPhase || ''}
+                 onDrawFromDeck={() => {}}
+                 onDrawFromDiscard={() => {}}
+                 onDeclareScambodia={handleDeclareScambodia}
+                 canDeclareScambodia={false}
+                 selectedCardPosition={selectedCardPosition}
+                 drawnFromDiscard={false}
+                 isSubmitting={isSubmittingAction}
+                 disabled={isSubmittingAction}
+             />
+         )}
+         
+         {/* State: Standard Action Needed (Drew non-power card) */}
+          {currentPhase !== 'Setup' && isMyTurn && hasDrawnCardState && !pendingPower && !activePower && (
+             <GameControls 
+                 isMyTurn={true}
+                 hasDrawnCard={true}
+                 onExchangeCard={handleExchangeCard}
+                 onDiscardDrawnCard={handleDiscardDrawnCard}
+                 onAttemptMatch={handleAttemptMatch}
+                 currentPhase={currentPhase || ''}
+                 onDrawFromDeck={() => {}}
+                 onDrawFromDiscard={() => {}}
+                 onDeclareScambodia={() => {}}
+                 canDeclareScambodia={false}
+                 onRedeemPower={() => {}}
+                 selectedCardPosition={selectedCardPosition}
+                 drawnFromDiscard={drawnCardSource === 'discard'}
+                 isSubmitting={isSubmittingAction}
+                 disabled={isSubmittingAction}
+             />
+         )}
+         
+         {/* State: Waiting for Opponent */}
+         {currentPhase !== 'Setup' && !isMyTurn && (
+              <div className="flex justify-center"><div className="px-4 py-2 bg-gray-100 text-gray-500 rounded-lg">Waiting for opponent's turn</div></div>
+         )}
+         
+         {/* Note: No controls shown if activePower is true (resolving power) */}
+         
       </div>
 
-      {/* Special Power Modal */}
-      {showSpecialPower && specialCard && gameState && (
+      {/* Special Power Panel */}
+      {/* Show when actively resolving power and selecting target */}
+      {isMyTurn && activePower && activePower.step === 'SelectingTarget' && (
         <SpecialPower
-          specialCard={specialCard}
+          specialCard={activePower.card} 
           isSubmitting={isSubmittingAction}
-          onUseSpecialPower={handleUseSpecialPower}
-          onSkipSpecialPower={handleSkipSpecialPower}
-          onCancelSelection={handleCancelSelection}
+          onUseSpecialPower={handleConfirmUsePower} 
+          onSkipSpecialPower={handleSkipPower} 
+          onCancelSelection={() => { setPowerTarget_OwnCardIndex(null); setPowerTarget_OpponentId(null); setPowerTarget_OpponentCardIndex(null); toast('Target selection cleared.'); }}
           powerTarget_OwnCardIndex={powerTarget_OwnCardIndex}
           powerTarget_OpponentId={powerTarget_OpponentId}
           powerTarget_OpponentCardIndex={powerTarget_OpponentCardIndex}
-          players={gameState.players}
+          players={gameState?.players || []}
           currentUserId={currentPlayerId || ''}
         />
       )}

@@ -1,0 +1,12 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# Your rule content
+
+- You can @ files here
+- You can use markdown but dont have to
+
+1. I am not a programmer, I don't have much software development knowledge or experience, you have to do all the technical heavy lifting, or suggest tools that I can provide to you for help, never ask me to manually make code/technical changes or implementations to the project.

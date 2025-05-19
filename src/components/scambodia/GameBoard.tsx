@@ -10,12 +10,18 @@ interface GameBoardProps {
   selectedCardPosition: CardPosition | null;
   onCardClick: (position: CardPosition, playerId?: string) => void;
   canSelectCard: boolean;
-  drawnCard: Card | null;
   powerTargetSelection?: {
     type: 'own' | 'opponent';
     playerId?: string;
   };
   visibleCardPositions: CardPosition[];
+  peekedCardInfo: { 
+    card: Card, 
+    targetPosition: CardPosition, 
+    targetPlayerId: string, 
+    peekerId: string 
+  } | null;
+  isPeekingActive: boolean;
 }
 
 /**
@@ -27,9 +33,10 @@ const GameBoard: React.FC<GameBoardProps> = ({
   selectedCardPosition,
   onCardClick,
   canSelectCard,
-  drawnCard,
   powerTargetSelection,
-  visibleCardPositions
+  visibleCardPositions,
+  peekedCardInfo,
+  isPeekingActive
 }) => {
   const currentRound = gameState.rounds[gameState.currentRoundNumber];
   if (!currentRound) return null;
@@ -80,11 +87,18 @@ const GameBoard: React.FC<GameBoardProps> = ({
             </div>
           )}
         </div>
-        {/* Drawn Card */}
-        {drawnCard && (
+        {/* Drawn Card - Conditionally Visible */}
+        {currentRound.drawnCard && (
           <div className="text-center">
             <p className="text-sm text-gray-600 mb-1">Drawn</p>
-            <CardComponent card={drawnCard} faceUp={true} position={0} isPeeking={false} isSelected={false} disabled={true} />
+            <CardComponent 
+              card={currentRound.drawnCard} 
+              faceUp={currentRound.drawnCardUserId === currentUserId} 
+              position={0}
+              isPeeking={false} 
+              isSelected={false} 
+              disabled={true} 
+            />
           </div>
         )}
       </div>
@@ -97,14 +111,25 @@ const GameBoard: React.FC<GameBoardProps> = ({
             player={player}
             cards={player.cards}
             onCardClick={onCardClick}
-            isTargeting={isTargetingOpponent && powerTargetSelection?.playerId === player.userId}
+            isTargeting={
+              isTargetingOpponent &&
+              (
+                !powerTargetSelection?.playerId ||
+                powerTargetSelection.playerId === player.userId
+              )
+            }
+            peekedCardInfo={peekedCardInfo}
+            isPeekingActive={isPeekingActive}
+            currentUserId={currentUserId}
           />
         ))}
       </div>
 
       {/* Player's hand */}
-      <div className={`bg-white p-4 rounded-lg shadow-md border-2 ${isTargetingOwn ? 'border-soft-pink' : 'border-transparent'}`}>
-        <h3 className="text-center text-sm font-medium mb-2">Your Hand {isTargetingOwn ? '(Select Card for Power)' : ''}</h3>
+      <div className={`bg-white p-4 rounded-lg shadow-md border-2 transition-all duration-300 
+            ${isTargetingOwn ? 'border-soft-pink shadow-soft-pink/50 animate-pulse' : 
+             (powerTargetSelection && !isTargetingOwn) ? 'border-gray-300 opacity-90' : 'border-transparent'}`}>
+        {isTargetingOwn && <p className="text-center text-sm font-medium mb-2 text-soft-pink">Select your card for the power</p>}
         <PlayerHand
           cards={myCards}
           visibleCardPositions={visibleCardPositions}
@@ -114,13 +139,16 @@ const GameBoard: React.FC<GameBoardProps> = ({
           canSelectCard={canSelectCard || isTargetingOwn}
           currentPhase={currentPhase}
           isTargeting={isTargetingOwn}
+          peekedCardInfo={peekedCardInfo}
+          isPeekingActive={isPeekingActive}
+          currentUserId={currentUserId}
         />
       </div>
 
       {/* Game status indicators */}
       <div className="mt-4 text-center text-sm">
         <p className="text-gray-600">
-          Round {gameState.currentRoundNumber + 1} of {gameState.totalRounds} | 
+          Round {gameState.currentRoundNumber} of {gameState.totalRounds} | 
           Wager: ₹{gameState.wagerPerPlayer} | 
           {currentRound.playerDeclaredScambodia && (
             <span className="text-soft-pink font-medium">
